@@ -115,6 +115,18 @@ class PortalAuthorizationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], reverse('minha_fila'))
 
+    def test_supervisor_tecnico_mantem_redirecionamento_para_admin(self):
+        supervisor = Usuario.objects.create_user(
+            cpf='93541134780', password='Senha#123', nome_completo='Supervisor',
+            telefone='83999990003', cargo_sistema=Usuario.CARGO_TECNICO_ADMIN,
+        )
+        self.client.force_login(supervisor)
+
+        response = self.client.get(reverse('redirecionar'), secure=True)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/admin/')
+
     def test_tecnico_nao_obtem_ordem_de_outro_tecnico(self):
         self.client.force_login(self.tecnico_a)
 
@@ -193,3 +205,38 @@ class FilaTecnicoTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.os_de_outro_tecnico.refresh_from_db()
         self.assertEqual(self.os_de_outro_tecnico.status, 'aberto')
+
+
+class PortalClienteTests(TestCase):
+    def setUp(self):
+        self.cliente = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente A', telefone='83999990000',
+        )
+        self.outro_cliente = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Cliente B', telefone='83999990001',
+        )
+        self.minha_os = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente A', equipamento='Notebook', descricao_problema='Falha',
+        )
+        self.outra_os = OrdemServico.objects.create(
+            cliente_usuario=self.outro_cliente, cliente_nome_exibicao='Cliente B', equipamento='Impressora', descricao_problema='Falha',
+        )
+        HistoricoOrdemServico.objects.create(ordem_servico=self.minha_os, status_momento='aberto', descricao_alteracao='Histórico do cliente A')
+        HistoricoOrdemServico.objects.create(ordem_servico=self.outra_os, status_momento='aberto', descricao_alteracao='Histórico sigiloso do cliente B')
+        self.client.force_login(self.cliente)
+
+    def test_cliente_ve_historico_apenas_da_propria_ordem(self):
+        response = self.client.get(reverse('lista_ordens'), secure=True)
+
+        self.assertContains(response, 'Histórico do cliente A')
+        self.assertNotContains(response, 'Histórico sigiloso do cliente B')
+
+    def test_lista_de_cliente_e_paginada(self):
+        for indice in range(12):
+            OrdemServico.objects.create(
+                cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente A', equipamento=f'Equipamento {indice}', descricao_problema='Falha',
+            )
+
+        response = self.client.get(reverse('lista_ordens'), secure=True)
+
+        self.assertTrue(response.context['page_obj'].has_other_pages())

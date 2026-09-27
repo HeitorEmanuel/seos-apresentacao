@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
+from django.core.paginator import Paginator
 from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -18,11 +19,14 @@ def lista_ordens(request):
         OrdemServico.objects
         .filter(cliente_usuario=request.user)
         .select_related('cliente_usuario', 'tecnico_responsavel')
-        .prefetch_related('pecas_utilizadas__peca')
+        .prefetch_related('pecas_utilizadas__peca', 'historicos')
         .order_by('-data_entrada', '-id')
     )
+    paginator = Paginator(ordens, 12)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'lista_ordens.html', {
-        'ordens': ordens,
+        'ordens': page_obj.object_list,
+        'page_obj': page_obj,
         'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
     })
 
