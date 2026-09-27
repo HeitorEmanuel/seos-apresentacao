@@ -390,6 +390,45 @@ class RegistroSistema(models.Model):
 
 
 
+class Notificacao(models.Model):
+    TIPO_STATUS_OS = 'status_os'
+    TIPO_ATRIBUICAO_TECNICO = 'atribuicao_tecnico'
+    TIPO_ESTOQUE_BAIXO = 'estoque_baixo'
+    TIPO_CHOICES = [
+        (TIPO_STATUS_OS, 'Atualização de ordem'),
+        (TIPO_ATRIBUICAO_TECNICO, 'Atribuição técnica'),
+        (TIPO_ESTOQUE_BAIXO, 'Estoque baixo'),
+    ]
+
+    destinatario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='notificacoes', verbose_name='Destinatário',
+    )
+    tipo = models.CharField(max_length=30, choices=TIPO_CHOICES, verbose_name='Tipo')
+    mensagem = models.CharField(max_length=255, verbose_name='Mensagem')
+    ordem_servico = models.ForeignKey(
+        OrdemServico, on_delete=models.CASCADE, related_name='notificacoes', blank=True, null=True,
+        verbose_name='Ordem de Serviço',
+    )
+    peca = models.ForeignKey(
+        'Peca', on_delete=models.CASCADE, related_name='notificacoes', blank=True, null=True,
+        verbose_name='Peça',
+    )
+    criada_em = models.DateTimeField(auto_now_add=True, verbose_name='Criada em')
+    lida_em = models.DateTimeField(blank=True, null=True, verbose_name='Lida em')
+
+    class Meta:
+        verbose_name = 'Notificação'
+        verbose_name_plural = 'Notificações'
+        ordering = ['-criada_em']
+
+    @property
+    def esta_lida(self):
+        return self.lida_em is not None
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} para {self.destinatario}'
+
+
 class Peca(models.Model):
     nome = models.CharField(max_length=120, verbose_name='Nome da Peça')
     codigo = models.CharField(

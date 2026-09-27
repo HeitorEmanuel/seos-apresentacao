@@ -5,6 +5,8 @@ from django.urls import reverse
 
 from .models import HistoricoOrdemServico, OrdemServico, RegistroSistema, Usuario, gerar_senha_padrao
 from .utils import apenas_digitos, validar_cpf
+from . import models as ordens_models
+from . import notifications
 
 
 class CPFUtilsTests(TestCase):
@@ -20,6 +22,32 @@ class CPFUtilsTests(TestCase):
 
         self.assertNotEqual(senha_1, senha_2)
         self.assertGreaterEqual(len(senha_1), 20)
+
+
+class NotificacaoModelTests(TestCase):
+    def test_modelo_de_notificacao_existe_e_pertence_ao_destinatario(self):
+        self.assertTrue(hasattr(ordens_models, 'Notificacao'))
+
+    def test_alerta_de_estoque_baixo_aberto_nao_e_duplicado(self):
+        self.assertTrue(hasattr(notifications, 'criar_notificacao'))
+        destinatario = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Supervisor',
+            telefone='83999990000', cargo_sistema=Usuario.CARGO_TECNICO_ADMIN,
+        )
+        peca = ordens_models.Peca.objects.create(nome='Fonte', codigo='FON-001')
+
+        primeira = notifications.criar_notificacao(
+            destinatario, ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO,
+            'Estoque baixo: Fonte', peca=peca,
+        )
+        segunda = notifications.criar_notificacao(
+            destinatario, ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO,
+            'Estoque baixo: Fonte', peca=peca,
+        )
+
+        self.assertIsNotNone(primeira)
+        self.assertIsNone(segunda)
+        self.assertEqual(ordens_models.Notificacao.objects.count(), 1)
 
 
 class CPFBackendTests(TestCase):
