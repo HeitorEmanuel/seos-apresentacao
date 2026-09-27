@@ -248,6 +248,7 @@ class OrdemServico(models.Model):
     def save(self, *args, **kwargs):
         criando = self.pk is None
         alteracoes = []
+        os_antiga = None
 
         if isinstance(self.data_entrada, str):
             data_entrada_convertida = parse_datetime(self.data_entrada)
@@ -313,6 +314,24 @@ class OrdemServico(models.Model):
             status_momento=self.status,
             descricao_alteracao=descricao_action,
         )
+
+        if not criando and os_antiga:
+            from .notifications import criar_notificacao
+
+            if os_antiga.status != self.status and self.cliente_usuario_id:
+                criar_notificacao(
+                    self.cliente_usuario,
+                    Notificacao.TIPO_STATUS_OS,
+                    f'OS #{self.pk}: status atualizado para {self.get_status_display()}.',
+                    ordem=self,
+                )
+            if os_antiga.tecnico_responsavel_id != self.tecnico_responsavel_id and self.tecnico_responsavel_id:
+                criar_notificacao(
+                    self.tecnico_responsavel,
+                    Notificacao.TIPO_ATRIBUICAO_TECNICO,
+                    f'Você foi atribuído à OS #{self.pk}.',
+                    ordem=self,
+                )
 
     def __str__(self):
         nome = self.cliente_usuario.nome_completo if self.cliente_usuario else self.cliente_nome_exibicao
@@ -415,6 +434,7 @@ class Notificacao(models.Model):
     )
     criada_em = models.DateTimeField(auto_now_add=True, verbose_name='Criada em')
     lida_em = models.DateTimeField(blank=True, null=True, verbose_name='Lida em')
+    resolvida_em = models.DateTimeField(blank=True, null=True, verbose_name='Resolvida em')
 
     class Meta:
         verbose_name = 'Notificação'
@@ -471,11 +491,18 @@ class Peca(models.Model):
         return self.quantidade * self.valor_unitario
 
     def save(self, *args, **kwargs):
+        criando = self.pk is None
+        quantidade_anterior = None
+        if not criando:
+            quantidade_anterior = Peca.objects.filter(pk=self.pk).values_list('quantidade', flat=True).first()
         if self.codigo:
             self.codigo = str(self.codigo).strip().upper()
         if self.nome:
             self.nome = str(self.nome).strip()
         super().save(*args, **kwargs)
+        if not criando and quantidade_anterior != self.quantidade:
+            from .notifications import atualizar_alerta_estoque
+            atualizar_alerta_estoque(self)
 
     def __str__(self):
         return f'{self.nome} ({self.codigo})'
@@ -588,6 +615,8 @@ class MovimentacaoEstoque(models.Model):
             super().save(*args, **kwargs)
             if criando:
                 self.aplicar_no_estoque()
+                from .notifications import atualizar_alerta_estoque
+                atualizar_alerta_estoque(self.peca)
 
     def __str__(self):
         return f'{self.get_tipo_display()} - {self.peca} - {self.quantidade}'

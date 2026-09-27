@@ -50,6 +50,83 @@ class NotificacaoModelTests(TestCase):
         self.assertEqual(ordens_models.Notificacao.objects.count(), 1)
 
 
+class NotificacaoEventosTests(TestCase):
+    def setUp(self):
+        self.cliente = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente', telefone='83999990000',
+        )
+        self.tecnico = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Técnico', telefone='83999990001',
+            cargo_sistema=Usuario.CARGO_TECNICO,
+        )
+        self.supervisor = Usuario.objects.create_user(
+            cpf='93541134780', password='Senha#123', nome_completo='Supervisor', telefone='83999990002',
+            cargo_sistema=Usuario.CARGO_TECNICO_ADMIN,
+        )
+        self.almoxarife = Usuario.objects.create_user(
+            cpf='12345678909', password='Senha#123', nome_completo='Almoxarife', telefone='83999990003',
+            cargo_sistema=Usuario.CARGO_ALMOXARIFADO,
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente', equipamento='Notebook',
+            descricao_problema='Falha',
+        )
+
+    def test_mudanca_de_status_notifica_cliente_da_ordem(self):
+        self.ordem.status = 'consertando'
+        self.ordem.save()
+
+        self.assertTrue(ordens_models.Notificacao.objects.filter(
+            destinatario=self.cliente,
+            tipo=ordens_models.Notificacao.TIPO_STATUS_OS,
+            ordem_servico=self.ordem,
+        ).exists())
+
+    def test_atribuicao_notifica_novo_tecnico(self):
+        self.ordem.tecnico_responsavel = self.tecnico
+        self.ordem.save()
+
+        self.assertTrue(ordens_models.Notificacao.objects.filter(
+            destinatario=self.tecnico,
+            tipo=ordens_models.Notificacao.TIPO_ATRIBUICAO_TECNICO,
+            ordem_servico=self.ordem,
+        ).exists())
+
+    def test_estoque_baixo_nao_duplica_ate_recuperar_e_baixar_novamente(self):
+        peca = ordens_models.Peca.objects.create(
+            nome='Fonte', codigo='FON-002', quantidade=5, estoque_minimo=2,
+        )
+        peca.quantidade = 2
+        peca.save()
+        peca.save()
+
+        self.assertEqual(ordens_models.Notificacao.objects.filter(
+            tipo=ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO, peca=peca,
+        ).count(), 2)
+
+        peca.quantidade = 5
+        peca.save()
+        peca.quantidade = 2
+        peca.save()
+
+        self.assertEqual(ordens_models.Notificacao.objects.filter(
+            tipo=ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO, peca=peca,
+        ).count(), 4)
+
+    def test_saida_de_estoque_que_atinge_minimo_cria_alertas(self):
+        peca = ordens_models.Peca.objects.create(
+            nome='Memória', codigo='MEM-001', quantidade=3, estoque_minimo=2,
+        )
+
+        ordens_models.MovimentacaoEstoque.objects.create(
+            peca=peca, tipo='saida', quantidade=1,
+        )
+
+        self.assertEqual(ordens_models.Notificacao.objects.filter(
+            tipo=ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO, peca=peca,
+        ).count(), 2)
+
+
 class CPFBackendTests(TestCase):
     def test_login_aceita_cpf_formatado(self):
         User = get_user_model()

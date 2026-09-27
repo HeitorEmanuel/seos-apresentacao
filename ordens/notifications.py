@@ -1,6 +1,9 @@
 """Serviços de notificação interna do SEOS."""
 
-from .models import Notificacao
+from django.db.models import Q
+from django.utils import timezone
+
+from .models import Notificacao, Usuario
 
 
 def criar_notificacao(destinatario, tipo, mensagem, ordem=None, peca=None):
@@ -13,7 +16,7 @@ def criar_notificacao(destinatario, tipo, mensagem, ordem=None, peca=None):
             destinatario=destinatario,
             tipo=tipo,
             peca=peca,
-            lida_em__isnull=True,
+            resolvida_em__isnull=True,
         ).exists():
             return None
 
@@ -24,3 +27,27 @@ def criar_notificacao(destinatario, tipo, mensagem, ordem=None, peca=None):
         ordem_servico=ordem,
         peca=peca,
     )
+
+
+def atualizar_alerta_estoque(peca):
+    """Abre alertas para estoque baixo e encerra o ciclo quando há reposição."""
+    alertas_abertos = Notificacao.objects.filter(
+        tipo=Notificacao.TIPO_ESTOQUE_BAIXO,
+        peca=peca,
+        resolvida_em__isnull=True,
+    )
+    if not peca.estoque_baixo:
+        alertas_abertos.update(resolvida_em=timezone.now())
+        return
+
+    destinatarios = Usuario.objects.filter(
+        Q(cargo_sistema__in=(Usuario.CARGO_TECNICO_ADMIN, Usuario.CARGO_ALMOXARIFADO))
+        | Q(is_superuser=True),
+    ).distinct()
+    for destinatario in destinatarios:
+        criar_notificacao(
+            destinatario,
+            Notificacao.TIPO_ESTOQUE_BAIXO,
+            f'Estoque baixo: {peca.nome} ({peca.quantidade} un.).',
+            peca=peca,
+        )
