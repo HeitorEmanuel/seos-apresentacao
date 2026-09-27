@@ -7,6 +7,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import OrdemServico, Usuario
+from .permissions import ordem_do_tecnico_ou_404, ordens_do_tecnico
 from django.utils import timezone
 
 
@@ -27,9 +28,28 @@ def lista_ordens(request):
 
 @login_required
 def redirecionar_usuario(request):
+    if request.user.eh_tecnico_operacional():
+        return redirect('minha_fila')
     if request.user.is_staff:
         return redirect('/admin/')
     return redirect('lista_ordens')
+
+
+@login_required
+def minha_fila(request):
+    return render(request, 'ordens/minha_fila.html', {
+        'ordens': ordens_do_tecnico(request.user),
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
+
+
+@login_required
+def detalhe_ordem_tecnico(request, ordem_id):
+    ordem = ordem_do_tecnico_ou_404(request.user, ordem_id)
+    return render(request, 'ordens/detalhe_ordem_tecnico.html', {
+        'ordem': ordem,
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
 
 
 @login_required
