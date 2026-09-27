@@ -4,7 +4,7 @@ from django.contrib.auth.hashers import identify_hasher
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
@@ -55,6 +55,7 @@ class UsuarioManager(BaseUserManager):
 
 class Usuario(AbstractUser):
     CARGO_ATENDENTE = 'atendente'
+    CARGO_TECNICO = 'tecnico'
     CARGO_TECNICO_ADMIN = 'tecnico_admin'
     CARGO_ALMOXARIFADO = 'almoxarifado'
 
@@ -68,7 +69,8 @@ class Usuario(AbstractUser):
     CARGO_CHOICES = [
         ('', 'Cliente comum / sem cargo'),
         (CARGO_ATENDENTE, 'Atendente'),
-        (CARGO_TECNICO_ADMIN, 'Técnico/Admin'),
+        (CARGO_TECNICO, 'Técnico'),
+        (CARGO_TECNICO_ADMIN, 'Supervisor Técnico'),
         (CARGO_ALMOXARIFADO, 'Almoxarifado'),
     ]
 
@@ -128,8 +130,12 @@ class Usuario(AbstractUser):
         if not self.username or self.username != self.cpf:
             self.username = self.cpf
 
-        # Cliente comum fica sem acesso ao admin. Cargos internos entram no painel.
-        if self.cargo_sistema:
+        # Apenas funções administrativas acessam o Django Admin.
+        if self.cargo_sistema in {
+            self.CARGO_ATENDENTE,
+            self.CARGO_TECNICO_ADMIN,
+            self.CARGO_ALMOXARIFADO,
+        }:
             self.is_staff = True
         elif not self.is_superuser:
             self.is_staff = False
@@ -149,6 +155,15 @@ class Usuario(AbstractUser):
 
     def eh_somente_cliente(self):
         return bool(not self.is_superuser and not self.is_staff and not self.cargo_sistema)
+
+    def eh_tecnico_operacional(self):
+        return bool(not self.is_superuser and self.cargo_sistema == self.CARGO_TECNICO)
+
+    def pode_ser_responsavel_tecnico(self):
+        return bool(
+            self.is_superuser
+            or self.cargo_sistema in {self.CARGO_TECNICO, self.CARGO_TECNICO_ADMIN}
+        )
 
     def login_esta_bloqueado(self):
         return bool(self.login_bloqueado_ate and self.login_bloqueado_ate > timezone.now())
@@ -207,7 +222,10 @@ class OrdemServico(models.Model):
         null=True,
         blank=True,
         related_name='servicos_atribuidos',
-        limit_choices_to={'is_staff': True},
+        limit_choices_to=(
+            Q(cargo_sistema__in=(Usuario.CARGO_TECNICO, Usuario.CARGO_TECNICO_ADMIN))
+            | Q(is_superuser=True)
+        ),
         verbose_name='Técnico Responsável',
     )
     data_entrada = models.DateTimeField(default=timezone.now, verbose_name='Data de Entrada do Produto')

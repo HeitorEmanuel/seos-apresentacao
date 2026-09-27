@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.conf import settings
 from django.test import TestCase
 
-from .models import gerar_senha_padrao
+from .models import Usuario, gerar_senha_padrao
 from .utils import apenas_digitos, validar_cpf
 
 
@@ -49,3 +49,36 @@ class ProductionSettingsTests(TestCase):
 
     def test_hsts_tem_valor_positivo_em_producao(self):
         self.assertGreater(settings.SECURE_HSTS_SECONDS, 0)
+
+
+class CargoTecnicoTests(TestCase):
+    def criar_usuario(self, cpf, cargo=''):
+        return Usuario.objects.create_user(
+            cpf=cpf,
+            password='Senha#123',
+            nome_completo='Usuário de Teste',
+            telefone='83999990000',
+            cargo_sistema=cargo,
+        )
+
+    def test_tecnico_operacional_nao_recebe_acesso_admin(self):
+        tecnico = self.criar_usuario('52998224725', Usuario.CARGO_TECNICO)
+
+        self.assertFalse(tecnico.is_staff)
+        self.assertTrue(tecnico.eh_tecnico_operacional())
+
+    def test_apenas_tecnico_supervisor_ou_superusuario_podem_ser_responsaveis(self):
+        tecnico = self.criar_usuario('52998224725', Usuario.CARGO_TECNICO)
+        atendente = self.criar_usuario('11144477735', Usuario.CARGO_ATENDENTE)
+        almoxarife = self.criar_usuario('12345678909', Usuario.CARGO_ALMOXARIFADO)
+        supervisor = self.criar_usuario('93541134780', Usuario.CARGO_TECNICO_ADMIN)
+        superusuario = self.criar_usuario('01234567890')
+        superusuario.is_superuser = True
+        superusuario.is_staff = True
+        superusuario.save(update_fields=['is_superuser', 'is_staff'])
+
+        self.assertTrue(tecnico.pode_ser_responsavel_tecnico())
+        self.assertTrue(supervisor.pode_ser_responsavel_tecnico())
+        self.assertTrue(superusuario.pode_ser_responsavel_tecnico())
+        self.assertFalse(atendente.pode_ser_responsavel_tecnico())
+        self.assertFalse(almoxarife.pode_ser_responsavel_tecnico())
