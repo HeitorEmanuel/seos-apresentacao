@@ -1,0 +1,44 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        /* Remove lápis, soma, X e olho dos campos relacionados desta tela */
+        .related-widget-wrapper-link,
+        a.related-widget-wrapper-link,
+        .change-related,
+        .add-related,
+        .delete-related,
+        .view-related {
+            display: none !important;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {% if seos_warning_message %}
+        <div class="seos-stock-warning">
+            {{ seos_warning_message }}
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}
+
+{% block submit_buttons_top %}
+    {{ block.super }}
+    <div class="seos-admin-action-row seos-admin-action-row-top">
+        <a href="{% url 'admin:ordens_peca_changelist' %}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar ao estoque
+        </a>
+    </div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+    {{ block.super }}
+    <div class="seos-admin-action-row">
+        <a href="{% url 'admin:ordens_peca_changelist' %}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar ao estoque
+        </a>
+    </div>
+{% endblock %}

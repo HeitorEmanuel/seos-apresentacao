@@ -1,0 +1,132 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block extrahead %}
+    {{ block.super }}
+    {% if is_popup %}
+        <style>
+            body.popup #content {
+                padding: 20px !important;
+            }
+
+            body.popup .seos-popup-user-card {
+                max-width: 720px;
+                margin: 0 auto;
+                overflow: hidden;
+                border: 1px solid rgba(148, 163, 184, 0.24);
+                border-radius: 18px;
+                background:
+                    radial-gradient(circle at top right, rgba(52, 152, 219, 0.16), transparent 34%),
+                    rgba(30, 41, 59, 0.78);
+                box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+            }
+
+            body.popup .seos-popup-user-header {
+                display: flex;
+                gap: 14px;
+                align-items: center;
+                padding: 18px 20px;
+                border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.40);
+            }
+
+            body.popup .seos-popup-user-icon {
+                display: inline-grid;
+                place-items: center;
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+                background: rgba(52, 152, 219, 0.18);
+                font-size: 21px;
+            }
+
+            body.popup .seos-popup-user-header h2 {
+                margin: 0;
+                color: #ffffff;
+                font-size: 23px;
+                font-weight: 900;
+                letter-spacing: -0.03em;
+            }
+
+            body.popup .seos-popup-user-header p {
+                margin: 4px 0 0 0;
+                color: #cbd5e1;
+                font-size: 13px;
+            }
+
+            body.popup .seos-popup-user-body {
+                padding: 16px 20px 20px 20px;
+            }
+
+            body.popup .seos-popup-user-body fieldset.module {
+                border: 1px solid rgba(148, 163, 184, 0.16) !important;
+                border-radius: 14px !important;
+                background: rgba(15, 23, 42, 0.18) !important;
+            }
+
+            body.popup .seos-popup-user-body .form-row {
+                padding: 13px 14px !important;
+                border-bottom: 1px solid rgba(148, 163, 184, 0.10) !important;
+            }
+
+            body.popup .seos-popup-user-body .submit-row {
+                margin-top: 16px !important;
+                padding: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            body.popup .seos-popup-user-body .submit-row input {
+                width: 100%;
+                min-height: 44px;
+                border-radius: 12px !important;
+                font-weight: 900 !important;
+            }
+        </style>
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if is_popup %}
+        <div class="seos-popup-user-card">
+            <header class="seos-popup-user-header">
+                <span class="seos-popup-user-icon">👤</span>
+                <div>
+                    <h2>Novo cliente</h2>
+                    <p>Cadastre o cliente rapidamente. O número interno será gerado automaticamente.</p>
+                </div>
+            </header>
+
+            <div class="seos-popup-user-body">
+                {{ block.super }}
+            </div>
+        </div>
+    {% else %}
+        {{ block.super }}
+    {% endif %}
+{% endblock %}
+
+{% block submit_buttons_top %}
+    {% if is_popup %}
+    {% else %}
+        {{ block.super }}
+        <div class="seos-admin-action-row seos-admin-action-row-top">
+            <a href="{% url 'admin:ordens_usuario_changelist' %}" class="button seos-admin-action-button seos-back-button">
+                ← Voltar para lista
+            </a>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+    {% if is_popup %}
+        {{ block.super }}
+    {% else %}
+        {{ block.super }}
+        <div class="seos-admin-action-row">
+            <a href="{% url 'admin:ordens_usuario_changelist' %}" class="button seos-admin-action-button seos-back-button">
+                ← Voltar para lista
+            </a>
+        </div>
+    {% endif %}
+{% endblock %}

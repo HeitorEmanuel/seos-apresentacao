@@ -1,0 +1,14 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+    <div class="seos-admin-action-row seos-admin-action-row-top seos-admin-action-row-between seos-peca-actions-row">
+        <a href="{% url 'admin:index' %}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar ao Dashboard
+        </a>
+        {% if has_add_permission %}
+            <a href="{% url 'admin:ordens_peca_add' %}" class="button seos-admin-action-button seos-add-peca-button">
+                ⊕ Adicionar Peça
+            </a>
+        {% endif %}
+    </div>
+{% endblock %}

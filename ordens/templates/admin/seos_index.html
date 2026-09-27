@@ -1,0 +1,150 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="seos-dashboard-shell">
+    <section class="seos-dashboard-hero">
+        <div>
+            <span class="seos-dashboard-kicker">Painel SEOS</span>
+            <h2>Controle rápido das ordens de serviço</h2>
+            <p>
+                Acompanhe ordens, estoque, alertas e ações importantes em um painel mais direto,
+                pensado para uso real e apresentação do sistema.
+            </p>
+        </div>
+
+        {% if pode_ordens %}
+            <form class="seos-dashboard-search" action="{% url 'admin:ordens_ordemservico_changelist' %}" method="get">
+                <label for="seos-dashboard-q">Buscar ordem de serviço</label>
+                <div>
+                    <input id="seos-dashboard-q" type="search" name="q" placeholder="Cliente, equipamento, técnico ou nº série">
+                    <button type="submit">Buscar</button>
+                </div>
+            </form>
+        {% else %}
+            <div class="seos-dashboard-search">
+                <label>Cargo atual</label>
+                <div class="seos-role-pill">{{ cargo_atual }}</div>
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="seos-dashboard-grid" aria-label="Atalhos principais">
+        {% if pode_ordens %}
+            <a class="seos-dashboard-card primary" href="{% url 'admin:ordens_ordemservico_add' %}">
+                <span class="seos-dashboard-icon">＋</span>
+                <strong>Nova Ordem</strong>
+                <small>Cadastrar novo serviço</small>
+            </a>
+
+            <a class="seos-dashboard-card" href="{% url 'admin:ordens_ordemservico_changelist' %}">
+                <span class="seos-dashboard-icon">🛠️</span>
+                <strong>Ordens</strong>
+                <small>Ver, editar e imprimir</small>
+            </a>
+        {% endif %}
+
+        {% if pode_estoque %}
+            <a class="seos-dashboard-card" href="{% url 'admin:ordens_peca_changelist' %}">
+                <span class="seos-dashboard-icon">📦</span>
+                <strong>Peças</strong>
+                <small>Controlar estoque</small>
+            </a>
+
+            <a class="seos-dashboard-card" href="{% url 'admin:ordens_movimentacaoestoque_changelist' %}">
+                <span class="seos-dashboard-icon">↕️</span>
+                <strong>Movimentações</strong>
+                <small>Entrada, saída e ajuste</small>
+            </a>
+        {% endif %}
+
+        {% if pode_clientes %}
+            <a class="seos-dashboard-card" href="{% url 'admin:ordens_usuario_add' %}">
+                <span class="seos-dashboard-icon">👤</span>
+                <strong>Novo Cliente</strong>
+                <small>Criar acesso por CPF</small>
+            </a>
+        {% endif %}
+
+        {% if pode_auditoria %}
+            <a class="seos-dashboard-card" href="{% url 'admin:ordens_registrosistema_changelist' %}">
+                <span class="seos-dashboard-icon">📋</span>
+                <strong>Registros</strong>
+                <small>Auditoria do sistema</small>
+            </a>
+        {% endif %}
+    </section>
+
+    <section class="seos-operational-panel" aria-label="Painel operacional">
+        <div class="seos-dashboard-section-title">
+            <h3>Resumo do dia</h3>
+            <p>Indicadores rápidos para saber onde agir primeiro.</p>
+        </div>
+
+        <div class="seos-metric-grid">
+            {% for item in resumo_cards %}
+                <a class="seos-metric-card {{ item.classe }}" href="{{ item.url }}">
+                    <span class="seos-metric-icon">{{ item.icone }}</span>
+                    <span class="seos-metric-value">{{ item.valor }}</span>
+                    <strong>{{ item.titulo }}</strong>
+                    <small>{{ item.descricao }}</small>
+                </a>
+            {% endfor %}
+        </div>
+
+        <div class="seos-dashboard-columns">
+            {% if pode_ordens %}
+            <article class="seos-dashboard-panel seos-recent-orders">
+                <header>
+                    <div>
+                        <h3>Últimas ordens</h3>
+                        <p>Serviços cadastrados ou alterados recentemente.</p>
+                    </div>
+                    <a href="{% url 'admin:ordens_ordemservico_changelist' %}">Ver todas</a>
+                </header>
+
+                {% if ultimas_ordens %}
+                    <div class="seos-recent-list">
+                        {% for ordem in ultimas_ordens %}
+                            <a class="seos-recent-row" href="{{ ordem.url }}">
+                                <span class="seos-os-number">OS #{{ ordem.id|stringformat:"04d" }}</span>
+                                <span class="seos-os-main">
+                                    <strong>{{ ordem.cliente }}</strong>
+                                    <small>{{ ordem.equipamento }}</small>
+                                </span>
+                                <span class="seos-status-chip status-{{ ordem.status_key }}">{{ ordem.status }}</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="seos-empty-history">Nenhuma ordem cadastrada ainda.</div>
+                {% endif %}
+            </article>
+            {% endif %}
+
+            <article class="seos-dashboard-panel seos-alert-panel">
+                <header>
+                    <div>
+                        <h3>Alertas</h3>
+                        <p>Pendências importantes do sistema.</p>
+                    </div>
+                </header>
+
+                <div class="seos-alert-list">
+                    {% for alerta in alertas_dashboard %}
+                        <a class="seos-alert-card {{ alerta.tipo }}" href="{{ alerta.url }}">
+                            <span class="seos-alert-icon">{{ alerta.icone }}</span>
+                            <span>
+                                <strong>{{ alerta.titulo }}</strong>
+                                <small>{{ alerta.descricao }}</small>
+                            </span>
+                            <b>{{ alerta.acao }}</b>
+                        </a>
+                    {% endfor %}
+                </div>
+            </article>
+        </div>
+
+    </section>
+</div>
+{% endblock %}

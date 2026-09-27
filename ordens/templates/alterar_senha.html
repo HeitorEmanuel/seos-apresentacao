@@ -1,0 +1,51 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br" data-seos-theme="{{ tema_inicial|default:'dark' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alterar senha - SEOS</title>
+    <meta name="seos-theme-save-url" content="{% url 'salvar_tema' %}">
+    <style>
+        :root { --azul:#3498db; --azul-hover:#2980b9; --bg:#121416; --card:#1d2229; --campo:#252b34; --borda:rgba(148,163,184,.22); --texto:#f4f6f9; --suave:#b8c2cc; --erro:#ffb4ad; --sombra:rgba(0,0,0,.35); }
+        html[data-seos-theme="light"] { --bg:#eef2f7; --card:#ffffff; --campo:#eef4fb; --borda:#cbd5e1; --texto:#0f172a; --suave:#475569; --erro:#b91c1c; --sombra:rgba(15,23,42,.14); }
+        * { box-sizing: border-box; }
+        body { min-height:100vh; margin:0; padding:24px; display:grid; place-items:center; background:linear-gradient(135deg,var(--bg),#0d0f11); color:var(--texto); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+        .card { width:min(100%,520px); padding:32px; background:var(--card); border:1px solid var(--borda); border-top:4px solid var(--azul); border-radius:16px; box-shadow:0 20px 40px var(--sombra); }
+        h1 { margin:0 0 8px; font-size:2rem; }
+        p { margin:0 0 22px; color:var(--suave); line-height:1.45; }
+        label { display:block; margin:16px 0 8px; font-weight:900; }
+        input { width:100%; min-height:50px; padding:12px 14px; border:1px solid var(--borda); border-radius:8px; background:var(--campo); color:var(--texto); font-size:1rem; }
+        .errors { margin:14px 0; padding:12px 14px; border-left:4px solid #e74c3c; border-radius:8px; background:rgba(231,76,60,.12); color:var(--erro); }
+        .helptext, ul { color:var(--suave); font-size:.86rem; line-height:1.4; }
+        .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:22px; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:11px 16px; border-radius:999px; border:1px solid transparent; font-weight:900; text-decoration:none; cursor:pointer; }
+        .primary { background:var(--azul); color:#fff; }
+        .primary:hover { background:var(--azul-hover); }
+        .secondary { background:transparent; color:var(--texto); border-color:var(--borda); }
+        .seos-theme-toggle { position:fixed; top:18px; right:18px; width:42px; height:38px; border-radius:999px; border:1px solid var(--borda); background:var(--card); color:var(--texto); cursor:pointer; }
+    </style>
+</head>
+<body>
+    <button type="button" class="seos-theme-toggle" data-seos-theme-toggle aria-label="Alternar tema">🌙</button>
+    <main class="card">
+        <h1>Alterar senha</h1>
+        <p>Use este formulário caso queira trocar sua senha de acesso ao painel.</p>
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}<div class="errors">{{ form.non_field_errors }}</div>{% endif %}
+            {% for field in form %}
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div class="errors">{{ field.errors }}</div>{% endif %}
+                {% if field.help_text %}<div class="helptext">{{ field.help_text|safe }}</div>{% endif %}
+            {% endfor %}
+            <div class="actions">
+                <button type="submit" class="btn primary">Salvar nova senha</button>
+                <a href="{% url 'lista_ordens' %}" class="btn secondary">Voltar</a>
+            </div>
+        </form>
+    </main>
+    <script src="{% static 'js/seos_theme.js' %}"></script>
+</body>
+</html>

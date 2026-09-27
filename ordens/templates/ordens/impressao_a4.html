@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>OS Nº {{ os.id|stringformat:"04d" }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --azul: #2563eb;
+            --azul-escuro: #1e3a8a;
+            --cinza-900: #111827;
+            --cinza-700: #374151;
+            --cinza-500: #6b7280;
+            --cinza-300: #d1d5db;
+            --cinza-100: #f3f4f6;
+            --verde: #16a34a;
+        }
+
+        body {
+            margin: 0;
+            background: #ffffff;
+            color: var(--cinza-900);
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .print-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 0 0 12px 0;
+            padding: 10px;
+            background: #111827;
+            border-bottom: 3px solid var(--azul);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+        }
+
+        .toolbar-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            padding: 8px 12px;
+            background: var(--azul);
+            color: #ffffff !important;
+            border: 1px solid var(--azul);
+            border-radius: 6px;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1;
+            text-decoration: none !important;
+            cursor: pointer;
+        }
+
+        .toolbar-btn.secondary {
+            background: #475569;
+            border-color: #475569;
+        }
+
+        .toolbar-btn:hover,
+        .toolbar-btn:focus {
+            filter: brightness(0.92);
+            color: #ffffff !important;
+        }
+
+        .os-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 277mm;
+            padding: 0;
+        }
+
+        .top-bar {
+            height: 7px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, var(--azul-escuro), var(--azul), #60a5fa);
+            border-radius: 999px;
+        }
+
+        .os-header {
+            display: grid;
+            grid-template-columns: 1fr 185px;
+            gap: 18px;
+            align-items: stretch;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--cinza-900);
+        }
+
+        .company-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .brand-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-mark {
+            display: inline-grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            background: var(--azul);
+            color: #ffffff;
+            border-radius: 10px;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: -0.05em;
+        }
+
+        .company-info h1 {
+            margin: 0;
+            color: var(--cinza-900);
+            font-size: 22px;
+            letter-spacing: -0.04em;
+            line-height: 1;
+        }
+
+        .company-info p {
+            margin: 4px 0 0 0;
+            color: var(--cinza-500);
+            font-size: 10px;
+        }
+
+        .doc-title {
+            margin-top: 8px;
+            padding: 6px 9px;
+            width: fit-content;
+            background: var(--cinza-100);
+            border: 1px solid var(--cinza-300);
+            border-radius: 6px;
+            color: var(--cinza-700);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .os-meta {
+            padding: 10px;
+            border: 1px solid var(--cinza-300);
+            border-radius: 9px;
+            background: #f8fafc;
+            text-align: right;
+        }
+
+        .os-number-label {
+            display: block;
+            color: var(--cinza-500);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .os-number {
+            display: block;
+            margin-top: 2px;
+            color: var(--azul);
+            font-size: 25px;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+        }
+
+        .os-date {
+            margin-top: 5px;
+            color: var(--cinza-700);
+            font-size: 10px;
+        }
+
+        .section {
+            margin-top: 9px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin: 0 0 5px 0;
+            color: var(--cinza-900);
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .section-title::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 15px;
+            background: var(--azul);
+            border-radius: 999px;
+        }
+
+        .panel {
+            padding: 8px;
+            border: 1px solid var(--cinza-300);
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 10px;
+        }
+
+        .info-grid.three {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .info-item {
+            min-height: 35px;
+            padding: 6px 8px;
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+        }
+
+        .info-item.full {
+            grid-column: 1 / -1;
+        }
+
+        .info-item strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--cinza-500);
+            font-size: 8.8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .info-item span {
+            color: var(--cinza-900);
+            font-size: 10.8px;
+            font-weight: 700;
+            word-break: break-word;
+        }
+
+        .text-block {
+            min-height: 42px;
+            padding: 8px 10px;
+            background-color: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid var(--azul);
+            border-radius: 7px;
+            color: var(--cinza-900);
+            word-wrap: break-word;
+            white-space: pre-line;
+        }
+
+        .highlight-green {
+            color: var(--verde) !important;
+            font-weight: 900 !important;
+        }
+
+        .access-credentials {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .credential-item {
+            padding: 8px 10px;
+            background-color: #f1f5f9;
+            border: 1px solid #dbe3ea;
+            border-radius: 7px;
+            font-size: 10px;
+        }
+
+        .credential-item strong {
+            display: block;
+            margin-bottom: 3px;
+            color: var(--cinza-500);
+            font-size: 8.8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .credential-item code {
+            display: inline-block;
+            padding: 3px 7px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            color: var(--azul-escuro);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .terms-list {
+            margin: 0;
+            padding-left: 16px;
+            color: var(--cinza-700);
+            font-size: 9.6px;
+        }
+
+        .terms-list li {
+            margin: 2px 0;
+        }
+
+        .os-footer {
+            margin-top: auto;
+            padding-top: 8px;
+        }
+
+        .tracking-box {
+            padding: 8px 10px;
+            background-color: #eff6ff;
+            border: 1px dashed var(--azul-escuro);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .tracking-box h3 {
+            margin: 0 0 3px 0;
+            color: var(--azul-escuro);
+            font-size: 11px;
+        }
+
+        .tracking-box p {
+            margin: 0;
+            color: var(--cinza-700);
+            font-size: 9.5px;
+        }
+
+        .signature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 28px;
+            margin-top: 22px;
+        }
+
+        .signature-line {
+            border-top: 1px solid var(--cinza-900);
+            padding-top: 4px;
+            text-align: center;
+            color: var(--cinza-700);
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .piece-table-wrapper {
+            overflow: hidden;
+            border: 1px solid var(--cinza-300);
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .piece-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9.4px;
+        }
+
+        .piece-table thead th {
+            padding: 7px 6px;
+            background: #eff6ff;
+            border-bottom: 1px solid var(--cinza-300);
+            color: var(--azul-escuro);
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-size: 8.5px;
+        }
+
+        .piece-table tbody td {
+            padding: 6px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        .piece-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .piece-note {
+            color: var(--cinza-500);
+            font-size: 8.7px;
+        }
+
+        .piece-summary {
+            margin-top: 6px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .piece-summary span {
+            display: inline-block;
+            padding: 4px 8px;
+            border: 1px solid var(--cinza-300);
+            border-radius: 999px;
+            background: #f8fafc;
+            font-size: 9px;
+            font-weight: 800;
+        }
+
+        .piece-name-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .piece-name-item {
+            padding: 8px 10px;
+            border: 1px solid var(--cinza-300);
+            border-radius: 8px;
+            background: #ffffff;
+            color: var(--cinza-900);
+            font-size: 10.5px;
+            font-weight: 800;
+        }
+
+        @page {
+            size: A4 portrait;
+            margin: 10mm;
+        }
+
+        @media print {
+            .print-toolbar {
+                display: none !important;
+            }
+
+            html,
+            body {
+                height: 100%;
+                overflow: hidden;
+            }
+
+            .os-container {
+                min-height: auto;
+                height: 100%;
+                justify-content: space-between;
+                page-break-inside: avoid;
+            }
+
+            .top-bar,
+            .os-meta,
+            .panel,
+            .info-item,
+            .text-block,
+            .credential-item,
+            .tracking-box,
+        }
+    </style>
+</head>
+<body onload="window.print()">
+    <nav class="print-toolbar" aria-label="Ações de impressão">
+        <a href="{% url 'admin:ordens_ordemservico_change' os.id %}" class="toolbar-btn secondary">← Voltar para OS</a>
+        <a href="{% url 'admin:ordens_ordemservico_changelist' %}" class="toolbar-btn secondary">📋 Lista de Ordens</a>
+        <button type="button" class="toolbar-btn" onclick="window.print()">🖨️ Imprimir novamente</button>
+    </nav>
+
+    <main class="os-container">
+        <div>
+            <div class="top-bar"></div>
+
+            <header class="os-header">
+                <div class="company-info">
+                    <div class="brand-line">
+                        <span class="brand-mark">SEOS</span>
+                        <div>
+                            <h1>SEOS</h1>
+                        </div>
+                    </div>
+                    <div class="doc-title">Ordem de Serviço • Via do cliente / responsável</div>
+                </div>
+
+                <div class="os-meta">
+                    <span class="os-number-label">Ordem de Serviço</span>
+                    <span class="os-number">Nº {{ os.id|stringformat:"04d" }}</span>
+                    <div class="os-date"><strong>Entrada:</strong> {{ os.data_entrada|date:"d/m/Y H:i" }}</div>
+                </div>
+            </header>
+
+            <section class="section">
+                <h2 class="section-title">1. Cliente e equipamento</h2>
+                <div class="panel">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <strong>Nome completo</strong>
+                            <span>
+                                {% if os.cliente_usuario %}
+                                    {{ os.cliente_usuario.nome_completo }}
+                                {% else %}
+                                    {{ os.cliente_nome_exibicao }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Telefone</strong>
+                            <span>{{ os.cliente_usuario.telefone|default:"Não informado" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>CPF</strong>
+                            <span>{{ os.cliente_usuario.cpf|default:"Não informado" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Equipamento</strong>
+                            <span>{{ os.equipamento }}</span>
+                        </div>
+                        <div class="info-item full">
+                            <strong>Nº cliente/equipamento</strong>
+                            <span>{{ os.numero_serie|default:"Não informado" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">2. Defeito relatado pelo cliente</h2>
+                <div class="text-block">{{ os.descricao_problema|default:"Nenhum detalhe adicional informado." }}</div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">3. Avaliação técnica</h2>
+                <div class="panel">
+                    <div class="info-grid">
+                        <div class="info-item full">
+                            <strong>Técnico responsável</strong>
+                            <span>{{ os.tecnico_responsavel.nome_completo|default:"Aguardando atribuição" }}</span>
+                        </div>
+                    </div>
+                    <div class="text-block" style="margin-top: 6px;">{{ os.avaliacao_tecnico|default:"Avaliação técnica pendente." }}</div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">4. Serviço planejado, prazo e valor</h2>
+                <div class="panel">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <strong>Previsão de entrega</strong>
+                            <span>{{ os.data_entrega_prevista|date:"d/m/Y"|default:"A definir" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Valor estimado</strong>
+                            <span class="highlight-green">
+                                {% if os.valor_estimado %}
+                                    R$ {{ os.valor_estimado }}
+                                {% else %}
+                                    Sob consulta / orçamento
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-block" style="margin-top: 6px;">{{ os.servico_planejado|default:"Serviço ainda não definido." }}</div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">5. Peças que serão trocadas</h2>
+                {% with movimentacoes=os.pecas_utilizadas.all %}
+                    {% if movimentacoes %}
+                        <div class="piece-name-list">
+                            {% for mov in movimentacoes %}
+                                <div class="piece-name-item">{{ mov.peca.nome }}</div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-block">Nenhuma peça trocada foi registrada nesta ordem de serviço.</div>
+                    {% endif %}
+                {% endwith %}
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">6. Acesso online</h2>
+                <div class="access-credentials">
+                    <div class="credential-item">
+                        <strong>Usuário / CPF</strong>
+                        <code>{{ os.cliente_usuario.cpf|default:"Sem usuário vinculado" }}</code>
+                    </div>
+                    <div class="credential-item">
+                        <strong>Senha de acesso</strong>
+                        <code>
+                            {% if os.cliente_usuario %}
+                                Solicite ao atendimento
+                            {% else %}
+                                Sem senha
+                            {% endif %}
+                        </code>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">7. Observações e termos</h2>
+                <div class="panel">
+                    <ul class="terms-list">
+                        <li>O prazo informado é uma previsão e pode variar conforme disponibilidade de peças ou complexidade do reparo.</li>
+                        <li>Serviços adicionais devem ser comunicados ao cliente antes da execução, quando alterarem o orçamento.</li>
+                        <li>A retirada do equipamento deve ser feita mediante identificação e conferência da ordem de serviço.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="signature-grid">
+                <div class="signature-line">Assinatura do Cliente</div>
+                <div class="signature-line">Assinatura do Responsável</div>
+            </section>
+        </div>
+
+        <footer class="os-footer">
+            <div class="tracking-box">
+                <h3>Acompanhe o status do reparo online</h3>
+                <p>Use o CPF e a senha fornecida pelo atendimento para consultar o andamento da ordem no painel do cliente.</p>
+            </div>
+        </footer>
+    </main>
+</body>
+</html>

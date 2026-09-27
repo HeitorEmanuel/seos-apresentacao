@@ -1,0 +1,261 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br" data-seos-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SEOS</title>
+    <script>
+        (function () {
+            try {
+                const tema = localStorage.getItem('seos_tema');
+                if (tema === 'light' || tema === 'dark') {
+                    document.documentElement.setAttribute('data-seos-theme', tema);
+                }
+            } catch (erro) {}
+        })();
+    </script>
+    <style>
+        :root {
+            --azul-seos: #3498db;
+            --azul-seos-hover: #2980b9;
+            --bg: #151719;
+            --bg-2: #101113;
+            --card: #2d2f31;
+            --campo: #1d1f21;
+            --borda: #44484d;
+            --texto: #ffffff;
+            --muted: #cbd5e1;
+            --shadow: rgba(0, 0, 0, 0.42);
+        }
+
+        html[data-seos-theme="light"] {
+            --bg: #eef2f7;
+            --bg-2: #f8fafc;
+            --card: #ffffff;
+            --campo: #eef4fb;
+            --borda: #cbd5e1;
+            --texto: #0f172a;
+            --muted: #475569;
+            --shadow: rgba(15, 23, 42, 0.14);
+        }
+
+        * { box-sizing: border-box; }
+
+        html,
+        body { min-height: 100%; }
+
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+            margin: 0;
+            padding: 24px;
+            display: grid;
+            place-items: center;
+            background:
+                radial-gradient(circle at top, rgba(52, 152, 219, 0.12), transparent 34%),
+                linear-gradient(135deg, var(--bg-2) 0%, var(--bg) 58%, var(--bg-2) 100%);
+            color: var(--texto);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .seos-theme-toggle {
+            position: fixed;
+            top: 18px;
+            right: 18px;
+            z-index: 10;
+            display: inline-grid;
+            place-items: center;
+            width: 46px;
+            height: 42px;
+            border: 1px solid var(--borda);
+            border-radius: 999px;
+            background: var(--card);
+            color: var(--texto);
+            box-shadow: 0 12px 24px var(--shadow);
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        .login-container {
+            width: min(100%, 460px);
+            padding: 42px 40px 44px;
+            background: var(--card);
+            border: 1px solid var(--borda);
+            border-top: 4px solid var(--azul-seos);
+            border-radius: 14px;
+            box-shadow: 0 22px 42px var(--shadow);
+        }
+
+        .logo-box {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 30px;
+        }
+
+        .logo-box img {
+            display: block;
+            width: min(100%, 300px);
+            height: auto;
+            object-fit: contain;
+        }
+
+        .logo-light { display: none !important; }
+        html[data-seos-theme="light"] .logo-dark { display: none !important; }
+        html[data-seos-theme="light"] .logo-light { display: block !important; }
+
+        .form-group { margin-bottom: 22px; }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: var(--texto);
+            font-size: 0.96rem;
+            font-weight: 800;
+        }
+
+        .form-control {
+            width: 100%;
+            min-height: 52px;
+            padding: 13px 15px;
+            background-color: var(--campo);
+            border: 1px solid var(--borda);
+            border-radius: 8px;
+            color: var(--texto);
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        .form-control::placeholder {
+            color: var(--muted);
+            opacity: 1;
+        }
+
+        .form-control:focus {
+            border-color: var(--azul-seos);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.16);
+        }
+
+        .btn-submit {
+            width: 100%;
+            min-height: 56px;
+            margin-top: 8px;
+            padding: 14px 16px;
+            background-color: var(--azul-seos);
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: 1.08rem;
+            font-weight: 900;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-submit:hover,
+        .btn-submit:focus {
+            background-color: var(--azul-seos-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(52, 152, 219, 0.18);
+        }
+
+        .error-msg {
+            margin-bottom: 22px;
+            padding: 12px 14px;
+            color: #b91c1c;
+            background-color: rgba(231, 76, 60, 0.12);
+            border-left: 4px solid #e74c3c;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.45;
+        }
+
+        html[data-seos-theme="dark"] .error-msg { color: #ffb4ad; }
+
+        .hint {
+            margin: 7px 0 0 0;
+            color: var(--muted);
+            font-size: 0.83rem;
+            line-height: 1.35;
+        }
+
+        @media (max-width: 520px) {
+            body { padding: 16px; }
+            .login-container { padding: 34px 24px 36px; }
+            .logo-box { margin-bottom: 26px; }
+            .logo-box img { width: min(100%, 260px); }
+        }
+    </style>
+</head>
+<body>
+    <button type="button" class="seos-theme-toggle" data-seos-theme-toggle aria-label="Alternar tema">🌙</button>
+
+    <main class="login-container" aria-label="Login SEOS">
+        <div class="logo-box">
+            <img class="logo-dark" src="{% static 'images/SEOS_login.png' %}" alt="SEOS Logo">
+            <img class="logo-light" src="{% static 'images/SEOS_login_light.png' %}" alt="SEOS Logo">
+        </div>
+
+        {% if form.errors %}
+            <div class="error-msg" role="alert">
+                {% if form.non_field_errors %}
+                    {{ form.non_field_errors|striptags }}
+                {% else %}
+                    CPF ou senha incorretos. Confira os dados e tente novamente.
+                {% endif %}
+            </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}" id="login-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="form-group">
+                <label for="id_username">CPF</label>
+                <input type="text" name="username" id="id_username" class="form-control" required inputmode="numeric" autocomplete="username" maxlength="14" placeholder="000.000.000-00" value="{{ form.username.value|default:'' }}">
+                <p class="hint">Pode digitar com ou sem pontos e traço.</p>
+            </div>
+
+            <div class="form-group">
+                <label for="id_password">Senha</label>
+                <input type="password" name="password" id="id_password" class="form-control" required autocomplete="current-password" placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn-submit">Entrar</button>
+        </form>
+    </main>
+
+    <script src="{% static 'js/seos_theme.js' %}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('login-form');
+            const cpfInput = document.getElementById('id_username');
+
+            function formatarCPF(value) {
+                return value
+                    .replace(/\D/g, '')
+                    .slice(0, 11)
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            }
+
+            if (cpfInput) {
+                cpfInput.addEventListener('input', function () {
+                    cpfInput.value = formatarCPF(cpfInput.value);
+                });
+            }
+
+            if (form && cpfInput) {
+                form.addEventListener('submit', function () {
+                    cpfInput.value = cpfInput.value.replace(/\D/g, '');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

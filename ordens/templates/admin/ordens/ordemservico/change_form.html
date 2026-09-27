@@ -1,0 +1,153 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+    {% if is_modo_visualizar %}
+        <div class="seos-view-mode-banner">
+            <div>
+                <strong>👁️ Modo visualização</strong>
+                <span>Esta Ordem de Serviço está aberta apenas para consulta. Para alterar qualquer informação, use o botão Editar.</span>
+            </div>
+        </div>
+    {% endif %}
+
+    {{ block.super }}
+{% endblock %}
+
+{% block submit_buttons_top %}
+    {% if not is_modo_visualizar %}
+        {{ block.super }}
+    {% endif %}
+
+    <div class="seos-admin-action-row seos-admin-action-row-top">
+        {% url opts|admin_urlname:'changelist' as changelist_url %}
+        <a href="{{ changelist_url }}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar para lista
+        </a>
+
+        {% if original %}
+            {% if is_modo_visualizar %}
+                <a href="{% url 'admin:ordens_ordemservico_change' original.pk %}"
+                   class="button seos-admin-action-button seos-edit-button">
+                    ✏️ Editar esta OS
+                </a>
+            {% else %}
+                <a href="{% url 'admin:ordens_ordemservico_change' original.pk %}?modo=visualizar"
+                   class="button seos-admin-action-button seos-view-button">
+                    👁️ Ver sem editar
+                </a>
+            {% endif %}
+
+            <a href="{% url 'admin:ordemservico_pdf' original.pk %}"
+               target="_blank"
+               rel="noopener"
+               class="button seos-admin-action-button seos-print-button">
+                📄 Imprimir OS
+            </a>
+
+            <a href="{% url 'admin:ordemservico_etiqueta' original.pk %}"
+               target="_blank"
+               rel="noopener"
+               class="button seos-admin-action-button seos-label-button">
+                🏷️ Imprimir Etiqueta
+            </a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+    {% if not is_modo_visualizar %}
+        {{ block.super }}
+    {% endif %}
+
+    <div class="seos-admin-action-row">
+        {% url opts|admin_urlname:'changelist' as changelist_url %}
+        <a href="{{ changelist_url }}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar para lista
+        </a>
+
+        {% if original %}
+            {% if is_modo_visualizar %}
+                <a href="{% url 'admin:ordens_ordemservico_change' original.pk %}"
+                   class="button seos-admin-action-button seos-edit-button">
+                    ✏️ Editar esta OS
+                </a>
+            {% else %}
+                <a href="{% url 'admin:ordens_ordemservico_change' original.pk %}?modo=visualizar"
+                   class="button seos-admin-action-button seos-view-button">
+                    👁️ Ver sem editar
+                </a>
+            {% endif %}
+
+            <a href="{% url 'admin:ordemservico_pdf' original.pk %}"
+               target="_blank"
+               rel="noopener"
+               class="button seos-admin-action-button seos-print-button">
+                📄 Imprimir OS
+            </a>
+
+            <a href="{% url 'admin:ordemservico_etiqueta' original.pk %}"
+               target="_blank"
+               rel="noopener"
+               class="button seos-admin-action-button seos-label-button">
+                🏷️ Imprimir Etiqueta
+            </a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+
+{% block admin_change_form_document_ready %}
+    {{ block.super }}
+    <script>
+        (function () {
+            function formatarMoeda(valor) {
+                const numero = Number(String(valor || '0').replace(',', '.'));
+                if (Number.isNaN(numero) || numero <= 0) return 'Não cadastrado';
+                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numero);
+            }
+
+            function renderizarPreviewPeca(select) {
+                const alvoId = select && select.dataset ? select.dataset.previewTarget : null;
+                const alvo = alvoId ? document.getElementById(alvoId) : null;
+                if (!alvo) return;
+
+                let pecas = {};
+                try {
+                    pecas = JSON.parse(select.dataset.pecasJson || '{}');
+                } catch (erro) {
+                    pecas = {};
+                }
+
+                const dados = pecas[select.value];
+                if (!dados) {
+                    alvo.innerHTML = '<div class="seos-peca-preview-empty">Selecione uma peça para visualizar descrição, valor unitário, preço de varejo e estoque.</div>';
+                    return;
+                }
+
+                alvo.innerHTML = `
+                    <div class="seos-peca-preview-title">${dados.nome} <span>(${dados.codigo})</span></div>
+                    <div class="seos-peca-preview-grid">
+                        <div class="seos-peca-preview-card"><span class="label">Descrição</span><span class="value">${dados.descricao || 'Sem descrição cadastrada.'}</span></div>
+                        <div class="seos-peca-preview-card"><span class="label">Valor unitário</span><span class="value">${formatarMoeda(dados.valor_unitario)}</span></div>
+                        <div class="seos-peca-preview-card"><span class="label">Preço de varejo</span><span class="value">${formatarMoeda(dados.preco_varejo)}</span></div>
+                        <div class="seos-peca-preview-card"><span class="label">Estoque</span><span class="value">${dados.estoque} un. <small>mín.: ${dados.estoque_minimo}</small></span></div>
+                    </div>
+                `;
+            }
+
+            function iniciarPreviewPecas() {
+                document.querySelectorAll('select.seos-peca-select').forEach(function (select) {
+                    renderizarPreviewPeca(select);
+                    select.addEventListener('change', function () {
+                        renderizarPreviewPeca(select);
+                    });
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', iniciarPreviewPecas);
+            setTimeout(iniciarPreviewPecas, 250);
+            setTimeout(iniciarPreviewPecas, 800);
+        })();
+    </script>
+{% endblock %}

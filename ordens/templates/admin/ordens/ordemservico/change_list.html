@@ -1,0 +1,35 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+    <div class="seos-date-tools">
+        <a href="{% url 'admin:ordens_ordemservico_changelist' %}" class="button seos-admin-action-button seos-date-all-button">
+            Todas as datas
+        </a>
+        <form method="get" class="seos-month-filter-form">
+            {% for key, value in request.GET.items %}
+                {% if key != 'mes_entrada' and key != 'p' %}
+                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                {% endif %}
+            {% endfor %}
+            <label for="seos_mes_entrada">Mês específico</label>
+            <select id="seos_mes_entrada" name="mes_entrada" class="seos-month-select">
+                <option value="">Escolha o mês</option>
+                {% for mes in seos_meses_disponiveis %}
+                    <option value="{{ mes.valor }}" {% if seos_mes_entrada == mes.valor %}selected{% endif %}>{{ mes.rotulo }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="button seos-admin-action-button seos-month-filter-button">Filtrar mês</button>
+        </form>
+    </div>
+
+    <div class="seos-admin-action-row seos-admin-action-row-top seos-admin-action-row-between seos-ordem-actions-row">
+        <a href="{% url 'admin:index' %}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar ao Dashboard
+        </a>
+        {% if has_add_permission %}
+            <a href="{% url 'admin:ordens_ordemservico_add' %}" class="button seos-admin-action-button seos-add-os-button">
+                ⊕ Adicionar Ordem de Serviço
+            </a>
+        {% endif %}
+    </div>
+{% endblock %}

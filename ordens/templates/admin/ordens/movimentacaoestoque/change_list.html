@@ -1,0 +1,17 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools %}
+    <div class="seos-admin-action-row seos-admin-action-row-top seos-stock-choice-row">
+        <a href="{% url 'admin:index' %}" class="button seos-admin-action-button seos-back-button">
+            ← Voltar ao Dashboard
+        </a>
+
+        <a href="{% url 'admin:ordens_movimentacaoestoque_add' %}?tipo=entrada" class="button seos-admin-action-button seos-stock-entry-button">
+            + Registrar Entrada
+        </a>
+
+        <a href="{% url 'admin:ordens_movimentacaoestoque_add' %}?tipo=saida" class="button seos-admin-action-button seos-stock-exit-button">
+            − Registrar Saída
+        </a>
+    </div>
+{% endblock %}

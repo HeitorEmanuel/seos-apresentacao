@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Etiqueta OS #{{ os.id|stringformat:"04d" }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #000000;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .print-toolbar {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            background: #111827;
+            border-bottom: 1px solid #374151;
+        }
+
+        .toolbar-btn {
+            display: inline-flex;
+            align-items: center;
+            min-height: 34px;
+            padding: 7px 11px;
+            border: 0;
+            border-radius: 8px;
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 800;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .toolbar-btn.secondary {
+            background: #4b5563;
+        }
+
+        .label-page {
+            width: 46mm;
+            height: 18mm;
+            padding: 0;
+            background: #ffffff;
+        }
+
+        .etiqueta-container {
+            width: 46mm;
+            height: 18mm;
+            padding: 1.4mm 1.5mm;
+            border: 0.45mm solid #000000;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .label-top {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1mm;
+            align-items: start;
+            padding-bottom: 0.65mm;
+            border-bottom: 0.25mm solid #000000;
+        }
+
+        .brand {
+            margin: 0;
+            font-size: 5.2pt;
+            font-weight: 900;
+            letter-spacing: 0.18em;
+            line-height: 1;
+        }
+
+        .os-number {
+            margin: 0;
+            font-size: 9pt;
+            font-weight: 900;
+            line-height: 1;
+            text-align: right;
+        }
+
+        .label-body {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.25mm;
+            padding-top: 0.75mm;
+        }
+
+        .line {
+            display: grid;
+            grid-template-columns: 11mm 1fr;
+            gap: 1mm;
+            align-items: baseline;
+            min-width: 0;
+            line-height: 1.05;
+        }
+
+        .line strong {
+            font-size: 4.3pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+        }
+
+        .line span {
+            overflow: hidden;
+            color: #000000;
+            font-size: 5.6pt;
+            font-weight: 800;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .line.serial span {
+            font-size: 6.4pt;
+            font-weight: 900;
+            letter-spacing: 0.03em;
+        }
+
+        .code-line {
+            margin-top: 0.35mm;
+            padding-top: 0.35mm;
+            border-top: 0.2mm dashed #000000;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 4.8pt;
+            font-weight: 900;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        @page {
+            size: 46mm 18mm;
+            margin: 0;
+        }
+
+        @media print {
+            html,
+            body {
+                width: 46mm;
+                height: 18mm;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .print-toolbar {
+                display: none !important;
+            }
+
+            .label-page {
+                width: 46mm;
+                height: 18mm;
+                margin: 0 !important;
+                padding: 0 !important;
+                page-break-after: avoid;
+                page-break-before: avoid;
+                page-break-inside: avoid;
+            }
+
+            .etiqueta-container {
+                width: 46mm;
+                height: 18mm;
+                page-break-after: avoid;
+                page-break-before: avoid;
+                page-break-inside: avoid;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body onload="window.print()">
+    <nav class="print-toolbar" aria-label="Ações de impressão">
+        <a href="{% url 'admin:ordens_ordemservico_change' os.id %}" class="toolbar-btn secondary">← Voltar para OS</a>
+        <a href="{% url 'admin:ordens_ordemservico_changelist' %}" class="toolbar-btn secondary">📋 Lista de Ordens</a>
+        <button type="button" class="toolbar-btn" onclick="window.print()">🖨️ Imprimir</button>
+    </nav>
+
+    <div class="label-page">
+        <main class="etiqueta-container">
+            <header class="label-top">
+                <p class="brand">SEOS</p>
+                <p class="os-number">OS {{ os.id|stringformat:"04d" }}</p>
+            </header>
+
+            <section class="label-body">
+                <div class="line">
+                    <strong>Cliente</strong>
+                    <span>
+                        {% if os.cliente_usuario %}
+                            {{ os.cliente_usuario.nome_completo }}
+                        {% else %}
+                            {{ os.cliente_nome_exibicao }}
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="line">
+                    <strong>Equip.</strong>
+                    <span>{{ os.equipamento }}</span>
+                </div>
+
+                <div class="line serial">
+                    <strong>Nº</strong>
+                    <span>{{ os.numero_serie|default:"Não informado" }}</span>
+                </div>
+
+                <div class="code-line">*OS-{{ os.id|stringformat:"04d" }}{% if os.numero_serie %}-{{ os.numero_serie }}{% endif %}*</div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
