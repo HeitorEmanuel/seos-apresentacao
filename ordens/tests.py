@@ -7,6 +7,7 @@ from .models import HistoricoOrdemServico, OrdemServico, RegistroSistema, Usuari
 from .utils import apenas_digitos, validar_cpf
 from . import models as ordens_models
 from . import notifications
+from . import views as ordens_views
 
 
 class CPFUtilsTests(TestCase):
@@ -125,6 +126,44 @@ class NotificacaoEventosTests(TestCase):
         self.assertEqual(ordens_models.Notificacao.objects.filter(
             tipo=ordens_models.Notificacao.TIPO_ESTOQUE_BAIXO, peca=peca,
         ).count(), 2)
+
+
+class CentralNotificacoesTests(TestCase):
+    def setUp(self):
+        self.usuario = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente', telefone='83999990000',
+        )
+        self.outro_usuario = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Outro', telefone='83999990001',
+        )
+        self.minha_notificacao = ordens_models.Notificacao.objects.create(
+            destinatario=self.usuario, tipo=ordens_models.Notificacao.TIPO_STATUS_OS, mensagem='Sua OS foi atualizada.',
+        )
+        self.notificacao_alheia = ordens_models.Notificacao.objects.create(
+            destinatario=self.outro_usuario, tipo=ordens_models.Notificacao.TIPO_STATUS_OS, mensagem='Mensagem privada.',
+        )
+        self.client.force_login(self.usuario)
+
+    def test_lista_mostra_apenas_notificacoes_do_usuario(self):
+        self.assertTrue(hasattr(ordens_views, 'notificacoes'))
+        response = self.client.get(reverse('notificacoes'), secure=True)
+
+        self.assertContains(response, 'Sua OS foi atualizada.')
+        self.assertNotContains(response, 'Mensagem privada.')
+
+    def test_usuario_marca_a_propria_notificacao_como_lida(self):
+        self.assertTrue(hasattr(ordens_views, 'marcar_notificacao_lida'))
+        response = self.client.post(reverse('marcar_notificacao_lida', args=[self.minha_notificacao.pk]), secure=True)
+
+        self.assertEqual(response.status_code, 302)
+        self.minha_notificacao.refresh_from_db()
+        self.assertIsNotNone(self.minha_notificacao.lida_em)
+
+    def test_usuario_nao_marca_notificacao_alheia(self):
+        self.assertTrue(hasattr(ordens_views, 'marcar_notificacao_lida'))
+        response = self.client.post(reverse('marcar_notificacao_lida', args=[self.notificacao_alheia.pk]), secure=True)
+
+        self.assertEqual(response.status_code, 404)
 
 
 class CPFBackendTests(TestCase):

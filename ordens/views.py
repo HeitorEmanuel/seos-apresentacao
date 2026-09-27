@@ -4,11 +4,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.paginator import Paginator
 from django.http import Http404, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .forms import AtualizacaoTecnicoForm
-from .models import OrdemServico, RegistroSistema, Usuario
+from .models import Notificacao, OrdemServico, RegistroSistema, Usuario
 from .permissions import ordem_do_tecnico_ou_404, ordens_do_tecnico
 from django.utils import timezone
 
@@ -48,6 +48,28 @@ def minha_fila(request):
         'ordens': ordens_do_tecnico(request.user),
         'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
     })
+
+
+@login_required
+def notificacoes(request):
+    page_obj = Paginator(
+        Notificacao.objects.filter(destinatario=request.user).select_related('ordem_servico', 'peca'),
+        20,
+    ).get_page(request.GET.get('page'))
+    return render(request, 'ordens/notificacoes.html', {
+        'page_obj': page_obj,
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
+
+
+@login_required
+@require_POST
+def marcar_notificacao_lida(request, notificacao_id):
+    notificacao = get_object_or_404(Notificacao, pk=notificacao_id, destinatario=request.user)
+    if not notificacao.lida_em:
+        notificacao.lida_em = timezone.now()
+        notificacao.save(update_fields=['lida_em'])
+    return redirect('notificacoes')
 
 
 @login_required
