@@ -1,0 +1,4 @@
+{% load static %}
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Minha Fila | SEOS</title><link rel="stylesheet" href="{% static 'portal/tecnico.css' %}"></head>
+<body><main class="shell"><header><p>SEOS · Técnico</p><h1>Minha fila</h1><a href="{% url 'alterar_senha' %}">Alterar senha</a></header>
+{% if ordens %}<section class="grid">{% for ordem in ordens %}<a class="card" href="{% url 'detalhe_ordem_tecnico' ordem.pk %}"><span class="badge">{{ ordem.get_status_display }}</span><h2>OS #{{ ordem.pk|stringformat:'04d' }}</h2><p>{{ ordem.equipamento }}</p><small>{{ ordem.cliente_nome_exibicao }}</small></a>{% endfor %}</section>{% else %}<section class="empty"><h2>Nenhuma ordem atribuída</h2><p>Sua fila está livre no momento.</p></section>{% endif %}</main></body></html>

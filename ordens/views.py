@@ -2,11 +2,12 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from .models import OrdemServico, Usuario
+from .forms import AtualizacaoTecnicoForm
+from .models import OrdemServico, RegistroSistema, Usuario
 from .permissions import ordem_do_tecnico_ou_404, ordens_do_tecnico
 from django.utils import timezone
 
@@ -37,6 +38,8 @@ def redirecionar_usuario(request):
 
 @login_required
 def minha_fila(request):
+    if not request.user.eh_tecnico_operacional():
+        raise Http404('Página não encontrada.')
     return render(request, 'ordens/minha_fila.html', {
         'ordens': ordens_do_tecnico(request.user),
         'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
@@ -48,8 +51,30 @@ def detalhe_ordem_tecnico(request, ordem_id):
     ordem = ordem_do_tecnico_ou_404(request.user, ordem_id)
     return render(request, 'ordens/detalhe_ordem_tecnico.html', {
         'ordem': ordem,
+        'form': AtualizacaoTecnicoForm(instance=ordem),
         'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
     })
+
+
+@login_required
+@require_POST
+def atualizar_ordem_tecnico(request, ordem_id):
+    ordem = ordem_do_tecnico_ou_404(request.user, ordem_id)
+    form = AtualizacaoTecnicoForm(request.POST, instance=ordem)
+    if form.is_valid():
+        ordem = form.save()
+        RegistroSistema.objects.create(
+            tipo='ordem_servico',
+            acao='alterado',
+            descricao=f'OS #{ordem.pk} atualizada pelo técnico {request.user.nome_completo}.',
+            usuario_responsavel=request.user,
+            objeto_id=ordem.pk,
+            objeto_referencia=f'OS #{ordem.pk}',
+        )
+        messages.success(request, 'Atualização registrada com sucesso.')
+    else:
+        messages.error(request, 'Não foi possível registrar a atualização.')
+    return redirect('detalhe_ordem_tecnico', ordem_id=ordem_id)
 
 
 @login_required

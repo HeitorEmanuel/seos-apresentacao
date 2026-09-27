@@ -3,7 +3,7 @@ from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import OrdemServico, Usuario, gerar_senha_padrao
+from .models import HistoricoOrdemServico, OrdemServico, RegistroSistema, Usuario, gerar_senha_padrao
 from .utils import apenas_digitos, validar_cpf
 
 
@@ -124,3 +124,72 @@ class PortalAuthorizationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_atendente_nao_acessa_fila_tecnica(self):
+        atendente = Usuario.objects.create_user(
+            cpf='93541134780', password='Senha#123', nome_completo='Atendente',
+            telefone='83999990003', cargo_sistema=Usuario.CARGO_ATENDENTE,
+        )
+        self.client.force_login(atendente)
+
+        response = self.client.get(reverse('minha_fila'), secure=True)
+
+        self.assertEqual(response.status_code, 404)
+
+
+class FilaTecnicoTests(TestCase):
+    def setUp(self):
+        self.tecnico = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Técnico',
+            telefone='83999990000', cargo_sistema=Usuario.CARGO_TECNICO,
+        )
+        self.outro_tecnico = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Outro Técnico',
+            telefone='83999990001', cargo_sistema=Usuario.CARGO_TECNICO,
+        )
+        self.cliente = Usuario.objects.create_user(
+            cpf='12345678909', password='Senha#123', nome_completo='Cliente Teste',
+            telefone='83999990002',
+        )
+        self.minha_os = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao=self.cliente.nome_completo,
+            equipamento='Notebook', descricao_problema='Não liga', tecnico_responsavel=self.tecnico,
+        )
+        self.os_de_outro_tecnico = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao=self.cliente.nome_completo,
+            equipamento='Impressora', descricao_problema='Não imprime', tecnico_responsavel=self.outro_tecnico,
+        )
+        self.client.force_login(self.tecnico)
+
+    def test_fila_exibe_apenas_ordens_atribuidas(self):
+        response = self.client.get(reverse('minha_fila'), secure=True)
+
+        self.assertContains(response, 'Notebook')
+        self.assertNotContains(response, 'Impressora')
+
+    def test_atualizacao_valida_status_e_registra_historico_e_auditoria(self):
+        response = self.client.post(
+            reverse('atualizar_ordem_tecnico', args=[self.minha_os.pk]),
+            {'status': 'consertando', 'avaliacao_tecnico': 'Diagnóstico concluído', 'servico_planejado': 'Trocar fonte'},
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.minha_os.refresh_from_db()
+        self.assertEqual(self.minha_os.status, 'consertando')
+        self.assertTrue(HistoricoOrdemServico.objects.filter(
+            ordem_servico=self.minha_os, status_momento='consertando',
+        ).exists())
+        self.assertTrue(RegistroSistema.objects.filter(
+            usuario_responsavel=self.tecnico, objeto_id=self.minha_os.pk,
+        ).exists())
+
+    def test_tecnico_nao_atualiza_ordem_de_outro_tecnico(self):
+        response = self.client.post(
+            reverse('atualizar_ordem_tecnico', args=[self.os_de_outro_tecnico.pk]),
+            {'status': 'consertando'}, secure=True,
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.os_de_outro_tecnico.refresh_from_db()
+        self.assertEqual(self.os_de_outro_tecnico.status, 'aberto')

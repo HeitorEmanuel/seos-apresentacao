@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.utils import timezone
 
-from .models import Usuario
+from .models import OrdemServico, Usuario
 from .utils import apenas_digitos
 
 
@@ -19,3 +19,9 @@ class CPFAuthenticationForm(AuthenticationForm):
                 code='login_bloqueado',
             )
         return super().clean()
+
+
+class AtualizacaoTecnicoForm(forms.ModelForm):
+    class Meta:
+        model = OrdemServico
+        fields = ('status', 'avaliacao_tecnico', 'servico_planejado')

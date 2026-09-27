@@ -1,0 +1,5 @@
+{% load static %}
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OS #{{ ordem.pk }} | SEOS</title><link rel="stylesheet" href="{% static 'portal/tecnico.css' %}"></head>
+<body><main class="shell"><a href="{% url 'minha_fila' %}">← Minha fila</a><h1>OS #{{ ordem.pk|stringformat:'04d' }} · {{ ordem.equipamento }}</h1><p>{{ ordem.descricao_problema }}</p>
+<section class="panel"><h2>Atualizar serviço</h2><form method="post" action="{% url 'atualizar_ordem_tecnico' ordem.pk %}">{% csrf_token %}{{ form.as_p }}<button type="submit">Salvar atualização</button></form></section>
+<section class="panel"><h2>Histórico</h2>{% for item in ordem.historicos.all %}<article><strong>{{ item.get_status_momento_display }}</strong><p>{{ item.descricao_alteracao }}</p><small>{{ item.data_alteracao|date:'d/m/Y H:i' }}</small></article>{% empty %}<p>Sem histórico.</p>{% endfor %}</section></main></body></html>
