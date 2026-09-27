@@ -3,13 +3,13 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.paginator import Paginator
-from django.http import Http404, JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from .forms import AtualizacaoTecnicoForm
-from .models import Notificacao, OrdemServico, RegistroSistema, Usuario
-from .permissions import ordem_do_tecnico_ou_404, ordens_do_tecnico
+from .forms import AnexoOrdemServicoForm, AtualizacaoTecnicoForm
+from .models import AnexoOrdemServico, Notificacao, OrdemServico, RegistroSistema, Usuario
+from .permissions import ordem_acessivel_ou_404, ordem_do_tecnico_ou_404, ordens_do_tecnico
 from django.utils import timezone
 
 
@@ -70,6 +70,54 @@ def marcar_notificacao_lida(request, notificacao_id):
         notificacao.lida_em = timezone.now()
         notificacao.save(update_fields=['lida_em'])
     return redirect('notificacoes')
+
+
+@login_required
+def baixar_anexo(request, anexo_id):
+    anexo = get_object_or_404(AnexoOrdemServico.objects.select_related('ordem_servico'), pk=anexo_id)
+    ordem_acessivel_ou_404(request.user, anexo.ordem_servico_id)
+    return FileResponse(anexo.arquivo.open('rb'), as_attachment=True, filename=anexo.nome_original)
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def anexos_ordem(request, ordem_id):
+    ordem = ordem_acessivel_ou_404(request.user, ordem_id)
+    if request.method == 'POST':
+        form = AnexoOrdemServicoForm(request.POST, request.FILES)
+        if form.is_valid():
+            anexo = form.save(commit=False)
+            anexo.ordem_servico = ordem
+            anexo.autor = request.user
+            try:
+                anexo.full_clean()
+                anexo.save()
+            except Exception:
+                messages.error(request, 'Não foi possível salvar este anexo.')
+            else:
+                messages.success(request, 'Anexo enviado com sucesso.')
+                return redirect('anexos_ordem', ordem_id=ordem.pk)
+    else:
+        form = AnexoOrdemServicoForm()
+    return render(request, 'ordens/anexos_ordem.html', {'ordem': ordem, 'form': form})
+
+
+@login_required
+@require_POST
+def excluir_anexo(request, anexo_id):
+    anexo = get_object_or_404(AnexoOrdemServico.objects.select_related('ordem_servico'), pk=anexo_id)
+    ordem = ordem_acessivel_ou_404(request.user, anexo.ordem_servico_id)
+    pode_excluir = (
+        anexo.autor_id == request.user.id
+        or request.user.is_superuser
+        or request.user.cargo_sistema == Usuario.CARGO_TECNICO_ADMIN
+    )
+    if not pode_excluir:
+        raise Http404('Anexo não encontrado.')
+    anexo.arquivo.delete(save=False)
+    anexo.delete()
+    messages.success(request, 'Anexo excluído.')
+    return redirect('anexos_ordem', ordem_id=ordem.pk)
 
 
 @login_required

@@ -1,4 +1,6 @@
 import secrets
+import uuid
+from pathlib import Path
 
 from django.contrib.auth.hashers import identify_hasher
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -447,6 +449,49 @@ class Notificacao(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} para {self.destinatario}'
+
+
+def caminho_anexo_ordem(instance, filename):
+    extensao = Path(filename).suffix.lower()
+    return f'privado/ordens/{instance.ordem_servico_id}/{uuid.uuid4().hex}{extensao}'
+
+
+class AnexoOrdemServico(models.Model):
+    EXTENSOES_PERMITIDAS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx'}
+    TAMANHO_MAXIMO = 5 * 1024 * 1024
+
+    ordem_servico = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='anexos')
+    autor = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, related_name='anexos_enviados')
+    arquivo = models.FileField(upload_to=caminho_anexo_ordem)
+    nome_original = models.CharField(max_length=255)
+    tamanho = models.PositiveIntegerField(default=0)
+    enviado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Anexo da ordem'
+        verbose_name_plural = 'Anexos das ordens'
+        ordering = ['-enviado_em']
+
+    def clean(self):
+        super().clean()
+        if not self.arquivo:
+            raise ValidationError({'arquivo': 'Selecione um arquivo.'})
+        extensao = Path(self.arquivo.name).suffix.lower()
+        if extensao not in self.EXTENSOES_PERMITIDAS:
+            raise ValidationError({'arquivo': 'Formato não permitido.'})
+        if self.arquivo.size <= 0 or self.arquivo.size > self.TAMANHO_MAXIMO:
+            raise ValidationError({'arquivo': 'O arquivo deve ter até 5 MB.'})
+        if self.ordem_servico_id and not self.pk and self.ordem_servico.anexos.count() >= 10:
+            raise ValidationError({'arquivo': 'Esta OS já possui o limite de 10 anexos.'})
+
+    def save(self, *args, **kwargs):
+        if self.arquivo:
+            self.nome_original = Path(self.arquivo.name).name
+            self.tamanho = self.arquivo.size
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nome_original
 
 
 class Peca(models.Model):

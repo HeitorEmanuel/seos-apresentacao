@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.conf import settings
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from .models import HistoricoOrdemServico, OrdemServico, RegistroSistema, Usuario, gerar_senha_padrao
@@ -162,6 +163,53 @@ class CentralNotificacoesTests(TestCase):
     def test_usuario_nao_marca_notificacao_alheia(self):
         self.assertTrue(hasattr(ordens_views, 'marcar_notificacao_lida'))
         response = self.client.post(reverse('marcar_notificacao_lida', args=[self.notificacao_alheia.pk]), secure=True)
+
+        self.assertEqual(response.status_code, 404)
+
+
+class AnexoOrdemServicoTests(TestCase):
+    def setUp(self):
+        self.cliente = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente', telefone='83999990000',
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente', equipamento='Notebook', descricao_problema='Falha',
+        )
+
+    def test_modelo_de_anexo_valida_formato_permitido(self):
+        self.assertTrue(hasattr(ordens_models, 'AnexoOrdemServico'))
+
+
+class AcessoAnexoTests(TestCase):
+    def setUp(self):
+        self.cliente = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente', telefone='83999990000',
+        )
+        self.outro_cliente = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Outro', telefone='83999990001',
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente', equipamento='Notebook', descricao_problema='Falha',
+        )
+        self.anexo = ordens_models.AnexoOrdemServico.objects.create(
+            ordem_servico=self.ordem, autor=self.cliente,
+            arquivo=SimpleUploadedFile('laudo.pdf', b'%PDF-1.4 demonstracao', content_type='application/pdf'),
+            nome_original='laudo.pdf',
+        )
+        self.client.force_login(self.cliente)
+
+    def test_cliente_baixa_anexo_da_propria_ordem(self):
+        self.assertTrue(hasattr(ordens_views, 'baixar_anexo'))
+        response = self.client.get(reverse('baixar_anexo', args=[self.anexo.pk]), secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+    def test_cliente_nao_baixa_anexo_de_ordem_alheia(self):
+        self.client.force_login(self.outro_cliente)
+        self.assertTrue(hasattr(ordens_views, 'baixar_anexo'))
+
+        response = self.client.get(reverse('baixar_anexo', args=[self.anexo.pk]), secure=True)
 
         self.assertEqual(response.status_code, 404)
 

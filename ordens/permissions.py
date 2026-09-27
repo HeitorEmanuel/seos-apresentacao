@@ -21,3 +21,22 @@ def ordem_do_tecnico_ou_404(user, ordem_id):
         return ordens_do_tecnico(user).get(pk=ordem_id)
     except OrdemServico.DoesNotExist as exc:
         raise Http404('Ordem de serviço não encontrada.') from exc
+
+
+def ordem_acessivel_ou_404(user, ordem_id):
+    if not user.is_authenticated:
+        raise Http404('Ordem de serviço não encontrada.')
+    queryset = OrdemServico.objects.all()
+    if user.is_superuser or user.cargo_sistema == user.CARGO_TECNICO_ADMIN:
+        try:
+            return queryset.get(pk=ordem_id)
+        except OrdemServico.DoesNotExist as exc:
+            raise Http404('Ordem de serviço não encontrada.') from exc
+    if user.eh_tecnico_operacional():
+        queryset = queryset.filter(tecnico_responsavel=user)
+    else:
+        queryset = queryset.filter(cliente_usuario=user)
+    try:
+        return queryset.get(pk=ordem_id)
+    except OrdemServico.DoesNotExist as exc:
+        raise Http404('Ordem de serviço não encontrada.') from exc
