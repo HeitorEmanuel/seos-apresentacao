@@ -1642,7 +1642,7 @@
             <div class="user-info">
                 <span>Olá, <strong>{{ user.first_name|default:user.nome_completo|default:user.username }}</strong></span>
                 {% if user.is_staff %}
-                    <a href="{% url 'admin:index' %}" class="admin-link" target="_blank" rel="noopener">⚙️ Admin</a>
+                    <a href="{% url 'admin:index' %}" class="admin-link">⚙️ Admin</a>
                 {% endif %}
             </div>
 

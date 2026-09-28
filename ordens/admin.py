@@ -41,8 +41,17 @@ def cargo_usuario(user):
     return getattr(user, 'cargo_sistema', '') or ''
 
 
+def eh_administrador_sistema(user):
+    return bool(getattr(user, 'is_superuser', False))
+
+
+def eh_supervisor_tecnico(user):
+    return bool(not eh_administrador_sistema(user) and cargo_usuario(user) == Usuario.CARGO_TECNICO_ADMIN)
+
+
 def eh_tecnico_admin(user):
-    return bool(getattr(user, 'is_superuser', False) or cargo_usuario(user) == Usuario.CARGO_TECNICO_ADMIN)
+    """Compatibilidade: quem supervisiona ordens, sem acesso total ao sistema."""
+    return bool(eh_administrador_sistema(user) or eh_supervisor_tecnico(user))
 
 
 def eh_atendente(user):
@@ -51,6 +60,14 @@ def eh_atendente(user):
 
 def eh_almoxarifado(user):
     return cargo_usuario(user) == Usuario.CARGO_ALMOXARIFADO
+
+
+def pode_gerir_ordens(user):
+    return bool(eh_tecnico_admin(user) or eh_atendente(user))
+
+
+def pode_gerir_estoque(user):
+    return bool(eh_administrador_sistema(user) or eh_almoxarifado(user))
 
 
 def tem_cargo_equipe(user):
@@ -129,14 +146,15 @@ class UsuarioAdmin(BaseUserAdmin):
     numero_serie_cliente_formatado.admin_order_field = 'numero_serie_cliente'
 
     def cargo_badge(self, obj):
-        label = obj.get_cargo_sistema_display() if getattr(obj, 'cargo_sistema', '') else 'Cliente'
+        label = 'Administrador do sistema' if obj.is_superuser else (obj.get_cargo_sistema_display() if getattr(obj, 'cargo_sistema', '') else 'Cliente')
         cores = {
             Usuario.CARGO_ATENDENTE: '#3498db',
             Usuario.CARGO_TECNICO_ADMIN: '#2ecc71',
             Usuario.CARGO_ALMOXARIFADO: '#f39c12',
+            'admin': '#8e44ad',
             '': '#64748b',
         }
-        cor = cores.get(getattr(obj, 'cargo_sistema', ''), '#64748b')
+        cor = '#8e44ad' if obj.is_superuser else cores.get(getattr(obj, 'cargo_sistema', ''), '#64748b')
         return format_html('<span class="seos-cargo-badge" style="background:{};">{}</span>', cor, label)
 
     cargo_badge.short_description = 'Cargo'
@@ -168,14 +186,14 @@ class UsuarioAdmin(BaseUserAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        if eh_tecnico_admin(request.user):
+        if eh_administrador_sistema(request.user):
             return qs
         if eh_atendente(request.user):
             return qs.filter(is_staff=False, is_superuser=False, cargo_sistema='')
         return qs.none()
 
     def get_fieldsets(self, request, obj=None):
-        if eh_tecnico_admin(request.user):
+        if eh_administrador_sistema(request.user):
             return super().get_fieldsets(request, obj)
         if eh_atendente(request.user):
             if obj is None:
@@ -189,30 +207,30 @@ class UsuarioAdmin(BaseUserAdmin):
         return super().get_fieldsets(request, obj)
 
     def get_readonly_fields(self, request, obj=None):
-        if eh_tecnico_admin(request.user):
+        if eh_administrador_sistema(request.user):
             return self.readonly_fields
         if eh_atendente(request.user):
             return ('numero_serie_cliente',)
         return self.readonly_fields
 
     def has_module_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return eh_administrador_sistema(request.user) or eh_atendente(request.user)
 
     def has_view_permission(self, request, obj=None):
-        if eh_tecnico_admin(request.user):
+        if eh_administrador_sistema(request.user):
             return True
         return eh_atendente(request.user) and (obj is None or somente_cliente(obj))
 
     def has_add_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return eh_administrador_sistema(request.user) or eh_atendente(request.user)
 
     def has_change_permission(self, request, obj=None):
-        if eh_tecnico_admin(request.user):
+        if eh_administrador_sistema(request.user):
             return True
         return eh_atendente(request.user) and (obj is None or somente_cliente(obj))
 
     def has_delete_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user)
+        return eh_administrador_sistema(request.user)
 
     def save_model(self, request, obj, form, change):
         if not change:
@@ -226,7 +244,7 @@ class UsuarioAdmin(BaseUserAdmin):
                 obj.set_password(senha_gerada)
                 obj.senha_temporaria = senha_gerada
 
-        if eh_atendente(request.user) and not eh_tecnico_admin(request.user):
+        if eh_atendente(request.user) and not eh_administrador_sistema(request.user):
             obj.cargo_sistema = ''
             obj.is_staff = False
             obj.is_superuser = False
@@ -765,16 +783,16 @@ class OrdemServicoAdmin(admin.ModelAdmin):
     actions = None
     change_list_template = 'admin/ordens/ordemservico/change_list.html'
     def has_module_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return pode_gerir_ordens(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return pode_gerir_ordens(request.user)
 
     def has_add_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return pode_gerir_ordens(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user) or eh_atendente(request.user)
+        return pode_gerir_ordens(request.user)
 
     def has_delete_permission(self, request, obj=None):
         return eh_tecnico_admin(request.user)
@@ -1502,19 +1520,19 @@ class HistoricoOrdemServicoAdmin(admin.ModelAdmin):
 class PecaAdmin(admin.ModelAdmin):
     actions = None
     def has_module_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_add_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_change_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_delete_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user)
+        return eh_administrador_sistema(request.user)
 
     change_list_template = 'admin/ordens/peca/change_list.html'
     change_form_template = 'admin/ordens/peca/change_form.html'
@@ -1629,13 +1647,13 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     actions = None
     change_list_template = 'admin/ordens/movimentacaoestoque/change_list.html'
     def has_module_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     def has_add_permission(self, request):
-        return eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
+        return pode_gerir_estoque(request.user)
 
     change_form_template = 'admin/ordens/movimentacaoestoque/change_form.html'
 
@@ -1785,10 +1803,10 @@ class RegistroSistemaAdmin(admin.ModelAdmin):
     change_list_template = 'admin/ordens/registrosistema/change_list.html'
     change_form_template = 'admin/ordens/registrosistema/change_form.html'
     def has_module_permission(self, request):
-        return eh_tecnico_admin(request.user)
+        return eh_administrador_sistema(request.user)
 
     def has_view_permission(self, request, obj=None):
-        return eh_tecnico_admin(request.user)
+        return eh_administrador_sistema(request.user)
 
     list_display = ('data_registro_formatada', 'tipo_badge', 'acao_badge', 'objeto_referencia', 'usuario_formatado', 'descricao_curta')
     list_filter = ('tipo', 'acao', 'data_registro', 'usuario_responsavel')
@@ -1826,7 +1844,7 @@ class RegistroSistemaAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         # Permite abrir para consultar, mas os campos ficam somente leitura.
-        return eh_tecnico_admin(request.user)
+        return eh_administrador_sistema(request.user)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -1899,10 +1917,10 @@ def seos_admin_index(self, request, extra_context=None):
     pecas_baixas_qs = Peca.objects.filter(ativo=True, quantidade__lte=F('estoque_minimo')).order_by('quantidade', 'nome')
     os_sem_tecnico_qs = ordens_ativas.filter(tecnico_responsavel__isnull=True)
 
-    pode_ordens = eh_tecnico_admin(request.user) or eh_atendente(request.user)
-    pode_clientes = eh_tecnico_admin(request.user) or eh_atendente(request.user)
-    pode_estoque = eh_tecnico_admin(request.user) or eh_almoxarifado(request.user)
-    pode_auditoria = eh_tecnico_admin(request.user)
+    pode_ordens = pode_gerir_ordens(request.user)
+    pode_clientes = eh_administrador_sistema(request.user) or eh_atendente(request.user)
+    pode_estoque = pode_gerir_estoque(request.user)
+    pode_auditoria = eh_administrador_sistema(request.user)
 
     resumo_cards = [
         {
@@ -2036,7 +2054,7 @@ def seos_admin_index(self, request, extra_context=None):
         'pode_clientes': pode_clientes,
         'pode_estoque': pode_estoque,
         'pode_auditoria': pode_auditoria,
-        'cargo_atual': request.user.get_cargo_sistema_display() if getattr(request.user, 'cargo_sistema', '') else 'Técnico/Admin' if request.user.is_superuser else 'Cliente',
+        'cargo_atual': 'Administrador do sistema' if request.user.is_superuser else (request.user.get_cargo_sistema_display() if getattr(request.user, 'cargo_sistema', '') else 'Cliente'),
         **(extra_context or {}),
     }
 

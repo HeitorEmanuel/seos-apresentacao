@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib import admin
 from django.conf import settings
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
@@ -9,6 +10,7 @@ from .utils import apenas_digitos, validar_cpf
 from . import models as ordens_models
 from . import notifications
 from . import views as ordens_views
+from .admin import MovimentacaoEstoqueAdmin, OrdemServicoAdmin, PecaAdmin, RegistroSistemaAdmin, UsuarioAdmin
 
 
 class CPFUtilsTests(TestCase):
@@ -322,6 +324,76 @@ class CargoTecnicoTests(TestCase):
         self.assertTrue(superusuario.pode_ser_responsavel_tecnico())
         self.assertFalse(atendente.pode_ser_responsavel_tecnico())
         self.assertFalse(almoxarife.pode_ser_responsavel_tecnico())
+
+    def test_superusuario_nao_fica_rotulado_como_supervisor_tecnico(self):
+        superusuario = self.criar_usuario('01234567890', Usuario.CARGO_TECNICO_ADMIN)
+        superusuario.is_superuser = True
+        superusuario.save(update_fields=['is_superuser'])
+        superusuario.refresh_from_db()
+
+        self.assertTrue(superusuario.is_staff)
+        self.assertEqual(superusuario.cargo_sistema, '')
+        self.assertTrue(superusuario.eh_administrador_sistema())
+
+
+class HierarquiaDoAdminTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.supervisor = Usuario.objects.create_user(
+            cpf='93541134780', password='Senha#123', nome_completo='Supervisor',
+            telefone='83999990000', cargo_sistema=Usuario.CARGO_TECNICO_ADMIN,
+        )
+        self.tecnico = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Técnico',
+            telefone='83999990001', cargo_sistema=Usuario.CARGO_TECNICO,
+        )
+        self.atendente = Usuario.objects.create_user(
+            cpf='11144477735', password='Senha#123', nome_completo='Atendente',
+            telefone='83999990002', cargo_sistema=Usuario.CARGO_ATENDENTE,
+        )
+        self.almoxarife = Usuario.objects.create_user(
+            cpf='12345678909', password='Senha#123', nome_completo='Almoxarife',
+            telefone='83999990003', cargo_sistema=Usuario.CARGO_ALMOXARIFADO,
+        )
+        self.admin = Usuario.objects.create_superuser(
+            cpf='39053344705', password='Senha#123', nome_completo='Administrador', telefone='83999990004',
+        )
+
+    def request_para(self, usuario):
+        request = self.factory.get('/admin/')
+        request.user = usuario
+        return request
+
+    def test_tecnico_nao_entra_no_admin(self):
+        self.assertFalse(self.tecnico.is_staff)
+        self.client.force_login(self.tecnico)
+        response = self.client.get('/admin/', secure=True)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response['Location'])
+
+    def test_supervisor_so_gerencia_ordens_e_relatorios(self):
+        request = self.request_para(self.supervisor)
+        self.assertTrue(OrdemServicoAdmin(OrdemServico, admin.site).has_module_permission(request))
+        self.assertFalse(UsuarioAdmin(Usuario, admin.site).has_module_permission(request))
+        self.assertFalse(PecaAdmin(OrdemServico._meta.apps.get_model('ordens', 'Peca'), admin.site).has_module_permission(request))
+        self.assertFalse(MovimentacaoEstoqueAdmin(OrdemServico._meta.apps.get_model('ordens', 'MovimentacaoEstoque'), admin.site).has_module_permission(request))
+        self.assertFalse(RegistroSistemaAdmin(RegistroSistema, admin.site).has_module_permission(request))
+
+    def test_atendente_e_almoxarife_recebem_apenas_seus_modulos(self):
+        atendente = self.request_para(self.atendente)
+        almoxarife = self.request_para(self.almoxarife)
+        self.assertTrue(UsuarioAdmin(Usuario, admin.site).has_module_permission(atendente))
+        self.assertTrue(OrdemServicoAdmin(OrdemServico, admin.site).has_module_permission(atendente))
+        self.assertFalse(PecaAdmin(OrdemServico._meta.apps.get_model('ordens', 'Peca'), admin.site).has_module_permission(atendente))
+        self.assertTrue(PecaAdmin(OrdemServico._meta.apps.get_model('ordens', 'Peca'), admin.site).has_module_permission(almoxarife))
+        self.assertFalse(OrdemServicoAdmin(OrdemServico, admin.site).has_module_permission(almoxarife))
+
+    def test_administrador_mantem_acesso_total(self):
+        request = self.request_para(self.admin)
+        self.assertTrue(UsuarioAdmin(Usuario, admin.site).has_module_permission(request))
+        self.assertTrue(OrdemServicoAdmin(OrdemServico, admin.site).has_module_permission(request))
+        self.assertTrue(PecaAdmin(OrdemServico._meta.apps.get_model('ordens', 'Peca'), admin.site).has_module_permission(request))
+        self.assertTrue(RegistroSistemaAdmin(RegistroSistema, admin.site).has_module_permission(request))
 
 
 class PortalAuthorizationTests(TestCase):
