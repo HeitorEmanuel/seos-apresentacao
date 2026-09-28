@@ -152,8 +152,9 @@ def relatorios_csv(request):
             timezone.localtime(ordem.data_entrada).strftime('%d/%m/%Y %H:%M'),
         ])
     def gerar_csv():
-        for linha in linhas:
-            yield '\ufeff' + ';'.join('"' + str(valor).replace('"', '""') + '"' for valor in linha) + '\r\n'
+        for indice, linha in enumerate(linhas):
+            prefixo = '\ufeff' if indice == 0 else ''
+            yield prefixo + ';'.join('"' + str(valor).replace('"', '""') + '"' for valor in linha) + '\r\n'
     resposta = StreamingHttpResponse(gerar_csv(), content_type='text/csv; charset=utf-8')
     resposta['Content-Disposition'] = 'attachment; filename="relatorio-seos.csv"'
     return resposta

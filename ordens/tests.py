@@ -238,7 +238,9 @@ class RelatoriosAdministrativosTests(TestCase):
         self.assertContains(response, 'Relatórios administrativos')
         self.assertEqual(csv_response.status_code, 200)
         self.assertEqual(csv_response['Content-Type'], 'text/csv; charset=utf-8')
-        self.assertNotIn(self.cliente.cpf, b''.join(csv_response.streaming_content).decode('utf-8-sig'))
+        conteudo_csv = b''.join(csv_response.streaming_content).decode('utf-8-sig')
+        self.assertNotIn(self.cliente.cpf, conteudo_csv)
+        self.assertNotIn('\ufeff', conteudo_csv)
 
     def test_cliente_nao_acessa_relatorios(self):
         self.client.force_login(self.cliente)
