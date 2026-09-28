@@ -2,11 +2,17 @@ from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.core.paginator import Paginator
+import csv
+
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from .models import OrdemServico, Usuario
+from .forms import AnexoOrdemServicoForm, AtualizacaoTecnicoForm
+from .models import AnexoOrdemServico, Notificacao, OrdemServico, RegistroSistema, Usuario
+from .permissions import ordem_acessivel_ou_404, ordem_do_tecnico_ou_404, ordens_do_tecnico
+from .reporting import consultar_ordens_relatorio, resumo_relatorio
 from django.utils import timezone
 
 
@@ -16,20 +22,212 @@ def lista_ordens(request):
         OrdemServico.objects
         .filter(cliente_usuario=request.user)
         .select_related('cliente_usuario', 'tecnico_responsavel')
-        .prefetch_related('pecas_utilizadas__peca')
+        .prefetch_related('pecas_utilizadas__peca', 'historicos')
         .order_by('-data_entrada', '-id')
     )
+    paginator = Paginator(ordens, 12)
+    page_obj = paginator.get_page(request.GET.get('page'))
     return render(request, 'lista_ordens.html', {
-        'ordens': ordens,
+        'ordens': page_obj.object_list,
+        'page_obj': page_obj,
         'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
     })
 
 
 @login_required
 def redirecionar_usuario(request):
+    if request.user.eh_tecnico_operacional():
+        return redirect('minha_fila')
     if request.user.is_staff:
         return redirect('/admin/')
     return redirect('lista_ordens')
+
+
+@login_required
+def minha_fila(request):
+    if not request.user.eh_tecnico_operacional():
+        raise Http404('Página não encontrada.')
+    return render(request, 'ordens/minha_fila.html', {
+        'ordens': ordens_do_tecnico(request.user),
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
+
+
+@login_required
+def notificacoes(request):
+    page_obj = Paginator(
+        Notificacao.objects.filter(destinatario=request.user).select_related('ordem_servico', 'peca'),
+        20,
+    ).get_page(request.GET.get('page'))
+    return render(request, 'ordens/notificacoes.html', {
+        'page_obj': page_obj,
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
+
+
+@login_required
+@require_POST
+def marcar_notificacao_lida(request, notificacao_id):
+    notificacao = get_object_or_404(Notificacao, pk=notificacao_id, destinatario=request.user)
+    if not notificacao.lida_em:
+        notificacao.lida_em = timezone.now()
+        notificacao.save(update_fields=['lida_em'])
+    return redirect('notificacoes')
+
+
+@login_required
+def baixar_anexo(request, anexo_id):
+    anexo = get_object_or_404(AnexoOrdemServico.objects.select_related('ordem_servico'), pk=anexo_id)
+    ordem_acessivel_ou_404(request.user, anexo.ordem_servico_id)
+    return FileResponse(anexo.arquivo.open('rb'), as_attachment=True, filename=anexo.nome_original)
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def anexos_ordem(request, ordem_id):
+    ordem = ordem_acessivel_ou_404(request.user, ordem_id)
+    if request.method == 'POST':
+        form = AnexoOrdemServicoForm(request.POST, request.FILES)
+        if form.is_valid():
+            anexo = form.save(commit=False)
+            anexo.ordem_servico = ordem
+            anexo.autor = request.user
+            try:
+                anexo.full_clean()
+                anexo.save()
+            except Exception:
+                messages.error(request, 'Não foi possível salvar este anexo.')
+            else:
+                messages.success(request, 'Anexo enviado com sucesso.')
+                return redirect('anexos_ordem', ordem_id=ordem.pk)
+    else:
+        form = AnexoOrdemServicoForm()
+    return render(request, 'ordens/anexos_ordem.html', {'ordem': ordem, 'form': form})
+
+
+@login_required
+@require_POST
+def excluir_anexo(request, anexo_id):
+    anexo = get_object_or_404(AnexoOrdemServico.objects.select_related('ordem_servico'), pk=anexo_id)
+    ordem = ordem_acessivel_ou_404(request.user, anexo.ordem_servico_id)
+    pode_excluir = (
+        anexo.autor_id == request.user.id
+        or request.user.is_superuser
+        or request.user.cargo_sistema == Usuario.CARGO_TECNICO_ADMIN
+    )
+    if not pode_excluir:
+        raise Http404('Anexo não encontrado.')
+    anexo.arquivo.delete(save=False)
+    anexo.delete()
+    messages.success(request, 'Anexo excluído.')
+    return redirect('anexos_ordem', ordem_id=ordem.pk)
+
+
+def _supervisor_ou_404(user):
+    if not (user.is_superuser or user.cargo_sistema == Usuario.CARGO_TECNICO_ADMIN):
+        raise Http404('Página não encontrada.')
+
+
+@login_required
+def relatorios_administrativos(request):
+    _supervisor_ou_404(request.user)
+    ordens = consultar_ordens_relatorio(request.GET)
+    return render(request, 'ordens/relatorios.html', {
+        'ordens': ordens[:100],
+        'resumo': resumo_relatorio(ordens),
+        'status_choices': OrdemServico.STATUS_CHOICES,
+        'tecnicos': Usuario.objects.filter(cargo_sistema__in=(Usuario.CARGO_TECNICO, Usuario.CARGO_TECNICO_ADMIN)),
+        'filtros': request.GET,
+    })
+
+
+@login_required
+def relatorios_csv(request):
+    _supervisor_ou_404(request.user)
+    linhas = [['OS', 'Equipamento', 'Status', 'Técnico', 'Entrada']]
+    for ordem in consultar_ordens_relatorio(request.GET):
+        linhas.append([
+            str(ordem.pk), ordem.equipamento, ordem.get_status_display(),
+            ordem.tecnico_responsavel.nome_completo if ordem.tecnico_responsavel else 'Não atribuído',
+            timezone.localtime(ordem.data_entrada).strftime('%d/%m/%Y %H:%M'),
+        ])
+    def gerar_csv():
+        for indice, linha in enumerate(linhas):
+            prefixo = '\ufeff' if indice == 0 else ''
+            yield prefixo + ';'.join('"' + str(valor).replace('"', '""') + '"' for valor in linha) + '\r\n'
+    resposta = StreamingHttpResponse(gerar_csv(), content_type='text/csv; charset=utf-8')
+    resposta['Content-Disposition'] = 'attachment; filename="relatorio-seos.csv"'
+    return resposta
+
+
+def _pdf_simples(linhas):
+    texto = '\n'.join(
+        f'BT /F1 10 Tf 45 {790 - indice * 16} Td ({linha.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")}) Tj ET'
+        for indice, linha in enumerate(linhas[:42])
+    )
+    objetos = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        f'<< /Length {len(texto.encode("latin-1", "replace"))} >>\nstream\n{texto}\nendstream'.encode('latin-1', 'replace'),
+    ]
+    conteudo = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for indice, objeto in enumerate(objetos, 1):
+        offsets.append(len(conteudo))
+        conteudo.extend(f'{indice} 0 obj\n'.encode())
+        conteudo.extend(objeto)
+        conteudo.extend(b'\nendobj\n')
+    xref = len(conteudo)
+    conteudo.extend(f'xref\n0 {len(objetos) + 1}\n0000000000 65535 f \n'.encode())
+    for offset in offsets[1:]:
+        conteudo.extend(f'{offset:010d} 00000 n \n'.encode())
+    conteudo.extend(f'trailer\n<< /Size {len(objetos) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF'.encode())
+    return bytes(conteudo)
+
+
+@login_required
+def relatorios_pdf(request):
+    _supervisor_ou_404(request.user)
+    ordens = consultar_ordens_relatorio(request.GET)
+    linhas = ['Relatório SEOS', f'Total de OS: {ordens.count()}', '']
+    for ordem in ordens[:35]:
+        linhas.append(f'OS #{ordem.pk} | {ordem.equipamento} | {ordem.get_status_display()}')
+    resposta = HttpResponse(_pdf_simples(linhas), content_type='application/pdf')
+    resposta['Content-Disposition'] = 'attachment; filename="relatorio-seos.pdf"'
+    return resposta
+
+
+@login_required
+def detalhe_ordem_tecnico(request, ordem_id):
+    ordem = ordem_do_tecnico_ou_404(request.user, ordem_id)
+    return render(request, 'ordens/detalhe_ordem_tecnico.html', {
+        'ordem': ordem,
+        'form': AtualizacaoTecnicoForm(instance=ordem),
+        'tema_inicial': getattr(request.user, 'tema_preferido', Usuario.TEMA_ESCURO) or Usuario.TEMA_ESCURO,
+    })
+
+
+@login_required
+@require_POST
+def atualizar_ordem_tecnico(request, ordem_id):
+    ordem = ordem_do_tecnico_ou_404(request.user, ordem_id)
+    form = AtualizacaoTecnicoForm(request.POST, instance=ordem)
+    if form.is_valid():
+        ordem = form.save()
+        RegistroSistema.objects.create(
+            tipo='ordem_servico',
+            acao='alterado',
+            descricao=f'OS #{ordem.pk} atualizada pelo técnico {request.user.nome_completo}.',
+            usuario_responsavel=request.user,
+            objeto_id=ordem.pk,
+            objeto_referencia=f'OS #{ordem.pk}',
+        )
+        messages.success(request, 'Atualização registrada com sucesso.')
+    else:
+        messages.error(request, 'Não foi possível registrar a atualização.')
+    return redirect('detalhe_ordem_tecnico', ordem_id=ordem_id)
 
 
 @login_required

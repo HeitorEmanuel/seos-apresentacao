@@ -93,6 +93,12 @@ python manage.py collectstatic --noinput
 Depois, clique em **Reload** na aba **Web**. O banco fica em
 `~/seos-data/`, fora do repositório, e portanto não é alterado por `git pull`.
 
+Quando esta atualização incluir o portal técnico, as migrações criam o cargo
+**Técnico**. Crie ou edite os usuários pelo Admin e atribua cada OS ao técnico
+responsável. O técnico entra na fila própria após o login; o Supervisor Técnico
+continua usando o Admin. Não é necessário, nem recomendado, criar ou enviar
+senhas, CPFs, banco SQLite ou variáveis de ambiente para o GitHub.
+
 ## Limites da conta grátis
 
 A conta gratuita permite um aplicativo web e expira após um mês. Renove-a no

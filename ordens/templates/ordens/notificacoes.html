@@ -1,0 +1,27 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR" data-seos-theme="{{ tema_inicial }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notificações | SEOS</title>
+    <link rel="stylesheet" href="{% static 'portal/tecnico.css' %}">
+</head>
+<body>
+    <main class="portal-shell">
+        <header class="portal-header"><div><p class="eyebrow">SEOS</p><h1>Notificações</h1><p>Atualizações importantes das suas ordens e atividades.</p></div><a class="secondary-action" href="{% url 'redirecionar' %}">Voltar</a></header>
+        <section class="queue-list">
+            {% for notificacao in page_obj %}
+                <article class="queue-card">
+                    <div><span class="status status-{{ notificacao.ordem_servico.status|default:'aberto' }}">{{ notificacao.get_tipo_display }}</span><h2>{{ notificacao.mensagem }}</h2><p>{{ notificacao.criada_em|date:"d/m/Y H:i" }}</p></div>
+                    {% if not notificacao.esta_lida %}<form method="post" action="{% url 'marcar_notificacao_lida' notificacao.pk %}">{% csrf_token %}<button type="submit">Marcar como lida</button></form>{% endif %}
+                </article>
+            {% empty %}
+                <div class="empty-state"><h2>Nenhuma notificação por enquanto.</h2></div>
+            {% endfor %}
+        </section>
+        {% if page_obj.has_other_pages %}<nav class="pagination">{% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">← Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Próxima →</a>{% endif %}</nav>{% endif %}
+    </main>
+    <script src="{% static 'js/seos_theme.js' %}"></script>
+</body>
+</html>

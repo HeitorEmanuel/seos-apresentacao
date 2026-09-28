@@ -564,6 +564,25 @@
             margin-top: 22px;
         }
 
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0 28px;
+            color: var(--texto-secundario);
+            font-weight: 800;
+        }
+
+        .pagination a {
+            padding: 9px 14px;
+            border: 1px solid var(--borda);
+            border-radius: 999px;
+            color: var(--texto);
+            text-decoration: none;
+            background: var(--card);
+        }
+
         .btn-fechar-modal {
             padding: 11px 16px;
             background-color: #475569;
@@ -1781,6 +1800,15 @@
                                 {% endwith %}
                             </div>
 
+                            <div class="text-block">
+                                <h3>Histórico de acompanhamento</h3>
+                                {% for item in ordem.historicos.all %}
+                                    <p><strong>{{ item.get_status_momento_display }}</strong> — {{ item.descricao_alteracao }}<br><small>{{ item.data_alteracao|date:"d/m/Y H:i" }}</small></p>
+                                {% empty %}
+                                    <p>Nenhuma atualização registrada até o momento.</p>
+                                {% endfor %}
+                            </div>
+
                             <div class="modal-footer">
                                 <button type="button" class="btn-fechar-modal" onclick="fecharDetalhes('{{ ordem.id }}')">← Voltar ao painel</button>
                             </div>
@@ -1798,6 +1826,18 @@
                 Nenhuma ordem bate com sua busca ou filtro.
             </div>
         </main>
+
+        {% if page_obj.has_other_pages %}
+            <nav class="pagination" aria-label="Paginação das ordens">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}">← Anterior</a>
+                {% endif %}
+                <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}">Próxima →</a>
+                {% endif %}
+            </nav>
+        {% endif %}
     </div>
 
     <script src="{% static 'js/seos_theme.js' %}"></script>

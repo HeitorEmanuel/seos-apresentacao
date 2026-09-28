@@ -1,10 +1,12 @@
 import secrets
+import uuid
+from pathlib import Path
 
 from django.contrib.auth.hashers import identify_hasher
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
@@ -55,6 +57,7 @@ class UsuarioManager(BaseUserManager):
 
 class Usuario(AbstractUser):
     CARGO_ATENDENTE = 'atendente'
+    CARGO_TECNICO = 'tecnico'
     CARGO_TECNICO_ADMIN = 'tecnico_admin'
     CARGO_ALMOXARIFADO = 'almoxarifado'
 
@@ -68,7 +71,8 @@ class Usuario(AbstractUser):
     CARGO_CHOICES = [
         ('', 'Cliente comum / sem cargo'),
         (CARGO_ATENDENTE, 'Atendente'),
-        (CARGO_TECNICO_ADMIN, 'Técnico/Admin'),
+        (CARGO_TECNICO, 'Técnico'),
+        (CARGO_TECNICO_ADMIN, 'Supervisor Técnico'),
         (CARGO_ALMOXARIFADO, 'Almoxarifado'),
     ]
 
@@ -128,8 +132,12 @@ class Usuario(AbstractUser):
         if not self.username or self.username != self.cpf:
             self.username = self.cpf
 
-        # Cliente comum fica sem acesso ao admin. Cargos internos entram no painel.
-        if self.cargo_sistema:
+        # Apenas funções administrativas acessam o Django Admin.
+        if self.cargo_sistema in {
+            self.CARGO_ATENDENTE,
+            self.CARGO_TECNICO_ADMIN,
+            self.CARGO_ALMOXARIFADO,
+        }:
             self.is_staff = True
         elif not self.is_superuser:
             self.is_staff = False
@@ -149,6 +157,15 @@ class Usuario(AbstractUser):
 
     def eh_somente_cliente(self):
         return bool(not self.is_superuser and not self.is_staff and not self.cargo_sistema)
+
+    def eh_tecnico_operacional(self):
+        return bool(not self.is_superuser and self.cargo_sistema == self.CARGO_TECNICO)
+
+    def pode_ser_responsavel_tecnico(self):
+        return bool(
+            self.is_superuser
+            or self.cargo_sistema in {self.CARGO_TECNICO, self.CARGO_TECNICO_ADMIN}
+        )
 
     def login_esta_bloqueado(self):
         return bool(self.login_bloqueado_ate and self.login_bloqueado_ate > timezone.now())
@@ -207,7 +224,10 @@ class OrdemServico(models.Model):
         null=True,
         blank=True,
         related_name='servicos_atribuidos',
-        limit_choices_to={'is_staff': True},
+        limit_choices_to=(
+            Q(cargo_sistema__in=(Usuario.CARGO_TECNICO, Usuario.CARGO_TECNICO_ADMIN))
+            | Q(is_superuser=True)
+        ),
         verbose_name='Técnico Responsável',
     )
     data_entrada = models.DateTimeField(default=timezone.now, verbose_name='Data de Entrada do Produto')
@@ -230,6 +250,7 @@ class OrdemServico(models.Model):
     def save(self, *args, **kwargs):
         criando = self.pk is None
         alteracoes = []
+        os_antiga = None
 
         if isinstance(self.data_entrada, str):
             data_entrada_convertida = parse_datetime(self.data_entrada)
@@ -295,6 +316,24 @@ class OrdemServico(models.Model):
             status_momento=self.status,
             descricao_alteracao=descricao_action,
         )
+
+        if not criando and os_antiga:
+            from .notifications import criar_notificacao
+
+            if os_antiga.status != self.status and self.cliente_usuario_id:
+                criar_notificacao(
+                    self.cliente_usuario,
+                    Notificacao.TIPO_STATUS_OS,
+                    f'OS #{self.pk}: status atualizado para {self.get_status_display()}.',
+                    ordem=self,
+                )
+            if os_antiga.tecnico_responsavel_id != self.tecnico_responsavel_id and self.tecnico_responsavel_id:
+                criar_notificacao(
+                    self.tecnico_responsavel,
+                    Notificacao.TIPO_ATRIBUICAO_TECNICO,
+                    f'Você foi atribuído à OS #{self.pk}.',
+                    ordem=self,
+                )
 
     def __str__(self):
         nome = self.cliente_usuario.nome_completo if self.cliente_usuario else self.cliente_nome_exibicao
@@ -372,6 +411,89 @@ class RegistroSistema(models.Model):
 
 
 
+class Notificacao(models.Model):
+    TIPO_STATUS_OS = 'status_os'
+    TIPO_ATRIBUICAO_TECNICO = 'atribuicao_tecnico'
+    TIPO_ESTOQUE_BAIXO = 'estoque_baixo'
+    TIPO_CHOICES = [
+        (TIPO_STATUS_OS, 'Atualização de ordem'),
+        (TIPO_ATRIBUICAO_TECNICO, 'Atribuição técnica'),
+        (TIPO_ESTOQUE_BAIXO, 'Estoque baixo'),
+    ]
+
+    destinatario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='notificacoes', verbose_name='Destinatário',
+    )
+    tipo = models.CharField(max_length=30, choices=TIPO_CHOICES, verbose_name='Tipo')
+    mensagem = models.CharField(max_length=255, verbose_name='Mensagem')
+    ordem_servico = models.ForeignKey(
+        OrdemServico, on_delete=models.CASCADE, related_name='notificacoes', blank=True, null=True,
+        verbose_name='Ordem de Serviço',
+    )
+    peca = models.ForeignKey(
+        'Peca', on_delete=models.CASCADE, related_name='notificacoes', blank=True, null=True,
+        verbose_name='Peça',
+    )
+    criada_em = models.DateTimeField(auto_now_add=True, verbose_name='Criada em')
+    lida_em = models.DateTimeField(blank=True, null=True, verbose_name='Lida em')
+    resolvida_em = models.DateTimeField(blank=True, null=True, verbose_name='Resolvida em')
+
+    class Meta:
+        verbose_name = 'Notificação'
+        verbose_name_plural = 'Notificações'
+        ordering = ['-criada_em']
+
+    @property
+    def esta_lida(self):
+        return self.lida_em is not None
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} para {self.destinatario}'
+
+
+def caminho_anexo_ordem(instance, filename):
+    extensao = Path(filename).suffix.lower()
+    return f'privado/ordens/{instance.ordem_servico_id}/{uuid.uuid4().hex}{extensao}'
+
+
+class AnexoOrdemServico(models.Model):
+    EXTENSOES_PERMITIDAS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx'}
+    TAMANHO_MAXIMO = 5 * 1024 * 1024
+
+    ordem_servico = models.ForeignKey(OrdemServico, on_delete=models.CASCADE, related_name='anexos')
+    autor = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, related_name='anexos_enviados')
+    arquivo = models.FileField(upload_to=caminho_anexo_ordem)
+    nome_original = models.CharField(max_length=255)
+    tamanho = models.PositiveIntegerField(default=0)
+    enviado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Anexo da ordem'
+        verbose_name_plural = 'Anexos das ordens'
+        ordering = ['-enviado_em']
+
+    def clean(self):
+        super().clean()
+        if not self.arquivo:
+            raise ValidationError({'arquivo': 'Selecione um arquivo.'})
+        extensao = Path(self.arquivo.name).suffix.lower()
+        if extensao not in self.EXTENSOES_PERMITIDAS:
+            raise ValidationError({'arquivo': 'Formato não permitido.'})
+        if self.arquivo.size <= 0 or self.arquivo.size > self.TAMANHO_MAXIMO:
+            raise ValidationError({'arquivo': 'O arquivo deve ter até 5 MB.'})
+        if self.ordem_servico_id and not self.pk and self.ordem_servico.anexos.count() >= 10:
+            raise ValidationError({'arquivo': 'Esta OS já possui o limite de 10 anexos.'})
+
+    def save(self, *args, **kwargs):
+        if self.arquivo:
+            self.nome_original = Path(self.arquivo.name).name
+            self.tamanho = self.arquivo.size
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.nome_original
+
+
 class Peca(models.Model):
     nome = models.CharField(max_length=120, verbose_name='Nome da Peça')
     codigo = models.CharField(
@@ -414,11 +536,18 @@ class Peca(models.Model):
         return self.quantidade * self.valor_unitario
 
     def save(self, *args, **kwargs):
+        criando = self.pk is None
+        quantidade_anterior = None
+        if not criando:
+            quantidade_anterior = Peca.objects.filter(pk=self.pk).values_list('quantidade', flat=True).first()
         if self.codigo:
             self.codigo = str(self.codigo).strip().upper()
         if self.nome:
             self.nome = str(self.nome).strip()
         super().save(*args, **kwargs)
+        if not criando and quantidade_anterior != self.quantidade:
+            from .notifications import atualizar_alerta_estoque
+            atualizar_alerta_estoque(self)
 
     def __str__(self):
         return f'{self.nome} ({self.codigo})'
@@ -531,6 +660,8 @@ class MovimentacaoEstoque(models.Model):
             super().save(*args, **kwargs)
             if criando:
                 self.aplicar_no_estoque()
+                from .notifications import atualizar_alerta_estoque
+                atualizar_alerta_estoque(self.peca)
 
     def __str__(self):
         return f'{self.get_tipo_display()} - {self.peca} - {self.quantidade}'
