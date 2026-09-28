@@ -8,6 +8,7 @@ from ordens.forms import CPFAuthenticationForm
 urlpatterns = [
     path('accounts/login/', LoginView.as_view(authentication_form=CPFAuthenticationForm), name='login'),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('admin/relatorios/', views.relatorios_administrativos, name='admin_relatorios'),
     path('admin/', admin.site.urls),
     path('redirecionar/', views.redirecionar_usuario, name='redirecionar'),
     path('', include('ordens.urls')),

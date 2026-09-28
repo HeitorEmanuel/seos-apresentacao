@@ -15,6 +15,9 @@ operações.
 - Painel do cliente para consultar somente as próprias ordens, com linha do
   tempo e paginação.
 - Fila operacional do técnico, restrita às ordens a ele atribuídas.
+- Notificações internas para status, atribuições e estoque baixo.
+- Anexos privados em PDF, imagem ou Word, protegidos por permissão.
+- Relatórios administrativos filtráveis, com exportação CSV e PDF.
 - Impressão de ordem de serviço e etiquetas.
 - Login por CPF, senhas armazenadas com hash e bloqueio temporário após
   tentativas inválidas.

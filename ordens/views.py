@@ -3,13 +3,16 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404, JsonResponse
+import csv
+
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .forms import AnexoOrdemServicoForm, AtualizacaoTecnicoForm
 from .models import AnexoOrdemServico, Notificacao, OrdemServico, RegistroSistema, Usuario
 from .permissions import ordem_acessivel_ou_404, ordem_do_tecnico_ou_404, ordens_do_tecnico
+from .reporting import consultar_ordens_relatorio, resumo_relatorio
 from django.utils import timezone
 
 
@@ -118,6 +121,81 @@ def excluir_anexo(request, anexo_id):
     anexo.delete()
     messages.success(request, 'Anexo excluído.')
     return redirect('anexos_ordem', ordem_id=ordem.pk)
+
+
+def _supervisor_ou_404(user):
+    if not (user.is_superuser or user.cargo_sistema == Usuario.CARGO_TECNICO_ADMIN):
+        raise Http404('Página não encontrada.')
+
+
+@login_required
+def relatorios_administrativos(request):
+    _supervisor_ou_404(request.user)
+    ordens = consultar_ordens_relatorio(request.GET)
+    return render(request, 'ordens/relatorios.html', {
+        'ordens': ordens[:100],
+        'resumo': resumo_relatorio(ordens),
+        'status_choices': OrdemServico.STATUS_CHOICES,
+        'tecnicos': Usuario.objects.filter(cargo_sistema__in=(Usuario.CARGO_TECNICO, Usuario.CARGO_TECNICO_ADMIN)),
+        'filtros': request.GET,
+    })
+
+
+@login_required
+def relatorios_csv(request):
+    _supervisor_ou_404(request.user)
+    linhas = [['OS', 'Equipamento', 'Status', 'Técnico', 'Entrada']]
+    for ordem in consultar_ordens_relatorio(request.GET):
+        linhas.append([
+            str(ordem.pk), ordem.equipamento, ordem.get_status_display(),
+            ordem.tecnico_responsavel.nome_completo if ordem.tecnico_responsavel else 'Não atribuído',
+            timezone.localtime(ordem.data_entrada).strftime('%d/%m/%Y %H:%M'),
+        ])
+    def gerar_csv():
+        for linha in linhas:
+            yield '\ufeff' + ';'.join('"' + str(valor).replace('"', '""') + '"' for valor in linha) + '\r\n'
+    resposta = StreamingHttpResponse(gerar_csv(), content_type='text/csv; charset=utf-8')
+    resposta['Content-Disposition'] = 'attachment; filename="relatorio-seos.csv"'
+    return resposta
+
+
+def _pdf_simples(linhas):
+    texto = '\n'.join(
+        f'BT /F1 10 Tf 45 {790 - indice * 16} Td ({linha.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")}) Tj ET'
+        for indice, linha in enumerate(linhas[:42])
+    )
+    objetos = [
+        b'<< /Type /Catalog /Pages 2 0 R >>',
+        b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        f'<< /Length {len(texto.encode("latin-1", "replace"))} >>\nstream\n{texto}\nendstream'.encode('latin-1', 'replace'),
+    ]
+    conteudo = bytearray(b'%PDF-1.4\n')
+    offsets = [0]
+    for indice, objeto in enumerate(objetos, 1):
+        offsets.append(len(conteudo))
+        conteudo.extend(f'{indice} 0 obj\n'.encode())
+        conteudo.extend(objeto)
+        conteudo.extend(b'\nendobj\n')
+    xref = len(conteudo)
+    conteudo.extend(f'xref\n0 {len(objetos) + 1}\n0000000000 65535 f \n'.encode())
+    for offset in offsets[1:]:
+        conteudo.extend(f'{offset:010d} 00000 n \n'.encode())
+    conteudo.extend(f'trailer\n<< /Size {len(objetos) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF'.encode())
+    return bytes(conteudo)
+
+
+@login_required
+def relatorios_pdf(request):
+    _supervisor_ou_404(request.user)
+    ordens = consultar_ordens_relatorio(request.GET)
+    linhas = ['Relatório SEOS', f'Total de OS: {ordens.count()}', '']
+    for ordem in ordens[:35]:
+        linhas.append(f'OS #{ordem.pk} | {ordem.equipamento} | {ordem.get_status_display()}')
+    resposta = HttpResponse(_pdf_simples(linhas), content_type='application/pdf')
+    resposta['Content-Disposition'] = 'attachment; filename="relatorio-seos.pdf"'
+    return resposta
 
 
 @login_required

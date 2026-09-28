@@ -214,6 +214,51 @@ class AcessoAnexoTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class RelatoriosAdministrativosTests(TestCase):
+    def setUp(self):
+        self.supervisor = Usuario.objects.create_user(
+            cpf='93541134780', password='Senha#123', nome_completo='Supervisor', telefone='83999990000',
+            cargo_sistema=Usuario.CARGO_TECNICO_ADMIN,
+        )
+        self.cliente = Usuario.objects.create_user(
+            cpf='52998224725', password='Senha#123', nome_completo='Cliente', telefone='83999990001',
+        )
+        self.ordem = OrdemServico.objects.create(
+            cliente_usuario=self.cliente, cliente_nome_exibicao='Cliente', equipamento='Notebook',
+            descricao_problema='Falha', status='consertando', tecnico_responsavel=self.supervisor,
+        )
+
+    def test_supervisor_visualiza_relatorio_e_exporta_csv_sem_cpf(self):
+        self.client.force_login(self.supervisor)
+        self.assertTrue(hasattr(ordens_views, 'relatorios_administrativos'))
+
+        response = self.client.get(reverse('relatorios_administrativos'), {'status': 'consertando'}, secure=True)
+        csv_response = self.client.get(reverse('relatorios_csv'), {'status': 'consertando'}, secure=True)
+
+        self.assertContains(response, 'Relatórios administrativos')
+        self.assertEqual(csv_response.status_code, 200)
+        self.assertEqual(csv_response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertNotIn(self.cliente.cpf, b''.join(csv_response.streaming_content).decode('utf-8-sig'))
+
+    def test_cliente_nao_acessa_relatorios(self):
+        self.client.force_login(self.cliente)
+        self.assertTrue(hasattr(ordens_views, 'relatorios_administrativos'))
+
+        response = self.client.get(reverse('relatorios_administrativos'), secure=True)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_supervisor_exporta_pdf_com_filtro_aplicado(self):
+        self.client.force_login(self.supervisor)
+        self.assertTrue(hasattr(ordens_views, 'relatorios_pdf'))
+
+        response = self.client.get(reverse('relatorios_pdf'), {'status': 'consertando'}, secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Content-Disposition'], 'attachment; filename="relatorio-seos.pdf"')
+
+
 class CPFBackendTests(TestCase):
     def test_login_aceita_cpf_formatado(self):
         User = get_user_model()
